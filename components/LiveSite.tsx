@@ -16,7 +16,7 @@ import { Checkout } from "./Checkout";
 import { Countdown } from "./Countdown";
 import { Ledger } from "./Ledger";
 import { Standings } from "./Standings";
-import { DotPattern } from "./ui/dot-pattern";
+import { PaperGrain } from "./ui/paper-grain";
 
 /*
  * three.js is a large dependency for one decorative object, so the bulb is
@@ -50,7 +50,7 @@ export function LiveSite({ initial }: { initial: SiteState }) {
 
   return (
     <main className="page" data-state={phase}>
-      <DotPattern />
+      <PaperGrain />
 
       <header className="masthead">
         <span className="masthead__domain">lastlight.lol</span>

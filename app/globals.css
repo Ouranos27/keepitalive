@@ -57,9 +57,8 @@
   --r-input: 0.625rem;
   --r-row: 0.5rem;
 
-  /* The background grain, which warms as the clock runs down. */
-  --dot: #cfcfc9;
-  --dot-opacity: 0.5;
+  /* How much tooth the paper has. It coarsens as the clock runs down. */
+  --grain: 0.055;
 
   --gutter: clamp(1.25rem, 5vw, 4rem);
   --column: 68rem;
@@ -163,25 +162,23 @@ a:hover {
 /* --- the background texture ----------------------------------------------- */
 
 /*
- * A dot grid, fixed behind everything and almost invisible. It gives the paper
- * a grain so the page reads as a printed surface rather than a blank div, and
- * it warms as the clock runs down. Pointer-events off, no JavaScript.
+ * Grain, not dots. One turbulence filter multiplied over the page so the paper
+ * has a tooth to it. Fixed and pointer-events none, so it composites once and
+ * is never repainted on scroll.
  */
-.dots {
+.grain {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
   z-index: 0;
   pointer-events: none;
-  color: var(--dot);
-  opacity: var(--dot-opacity);
-  transition:
-    color 1.2s linear,
-    opacity 1.2s linear;
+  opacity: var(--grain);
+  mix-blend-mode: multiply;
+  transition: opacity 1.2s linear;
 }
 
-.page > *:not(.dots) {
+.page > *:not(.grain) {
   position: relative;
   z-index: 1;
 }
@@ -202,19 +199,25 @@ a:hover {
   place-items: center;
 }
 
+/*
+ * The pool of light the bulb throws onto the paper. A warm wash rather than
+ * anything additive: on a light ground you cannot make something look lit by
+ * adding brightness, only by tinting what is already there. It shrinks and
+ * cools as the filament does, and is gone at zero.
+ */
 .bulb::before {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: 20%;
-  width: calc(110% * var(--life, 1) + 35%);
+  top: 62%;
+  width: calc(150% * var(--life, 1) + 45%);
   aspect-ratio: 1;
-  translate: -50% 50%;
+  translate: -50% -50%;
   border-radius: 50%;
   background: radial-gradient(
     circle,
-    color-mix(in oklab, #ffab5e, transparent calc(78% + (1 - var(--life, 1)) * 22%)),
-    transparent 68%
+    color-mix(in oklab, #ffa94e, transparent calc(74% + (1 - var(--life, 1)) * 26%)),
+    transparent 66%
   );
   pointer-events: none;
   transition:
@@ -763,8 +766,7 @@ a:hover {
 }
 
 [data-state="critical"] {
-  --dot: color-mix(in oklab, var(--blood), var(--paper) 55%);
-  --dot-opacity: 0.6;
+  --grain: 0.085;
 }
 
 [data-state="critical"] .ledger,
@@ -797,8 +799,7 @@ a:hover {
 }
 
 [data-state="terminal"] {
-  --dot: color-mix(in oklab, var(--blood), var(--paper) 40%);
-  --dot-opacity: 0.7;
+  --grain: 0.11;
 }
 
 [data-state="terminal"] .hero__copy,
@@ -835,8 +836,7 @@ a:hover {
  * again, and it should not look like it is about to.
  */
 [data-state="dead"] {
-  --dot: #d6d6d1;
-  --dot-opacity: 0.35;
+  --grain: 0.04;
   --clock-weight: 760;
   --clock-width: 112%;
   --cell: 0.695em;

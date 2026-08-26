@@ -1,7 +1,9 @@
 import { formatDuration, formatUsd } from "@/lib/clock";
 import { formatStamp } from "@/lib/format";
 import type { SiteState } from "@/lib/types";
+import { DeadBulb } from "./DeadBulb";
 import { DeadClock } from "./Countdown";
+import { PaperGrain } from "./ui/paper-grain";
 import { Ledger } from "./Ledger";
 import { Standings } from "./Standings";
 
@@ -24,12 +26,15 @@ export function Memorial({ state }: { state: SiteState }) {
 
   return (
     <main className="page" data-state="dead">
+      <PaperGrain />
+
       <header className="masthead">
         <span className="masthead__domain">lastlight.lol</span>
         <span className="masthead__status">Dead</span>
       </header>
 
       <section className="hero">
+        <DeadBulb />
         <DeadClock />
         <div className="hero__copy">
           {/*

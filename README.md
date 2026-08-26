@@ -84,6 +84,7 @@ past starts the app near death, and setting it far enough back starts it dead.
 | `app/api/webhooks/polar` | The only thing that moves the clock. |
 | `components/Countdown.tsx` | The clock, and most of the dread. |
 | `components/Bulb.tsx` | The three.js bulb, lazy-loaded. |
+| `components/ui/paper-grain.tsx` | The background tooth, one SVG filter. |
 | `components/Standings.tsx` | The board. |
 | `components/Memorial.tsx` | The dead state. |
 
@@ -165,10 +166,31 @@ information rather than decoration.
 Above the clock hangs the bulb the site is named after, rendered in three.js.
 Its filament burns down across the whole day on a square-root curve, losing
 colour temperature from white through amber to a dull red, dimming, and
-stuttering more often the closer it gets. The pool of light under it is drawn in
-CSS, because a filament on a white page is a small orange line and reads as
-nothing on its own. It is lazy-loaded, stops rendering when the tab is hidden or
-the filament is cold, and the page is complete without it.
+guttering more the closer it gets. The memorial shows the same bulb cold.
+
+Four things make it read as lit glass rather than a grey ball on a stick:
+
+- **A lathed A19 profile, not a sphere.** The neck, shoulder and tip are what
+  make a silhouette a bulb. Shape borrowed from
+  [threejs-realistic-bulb](https://github.com/wory-bonbon/threejs-realistic-bulb),
+  which builds the envelope the same way.
+- **A fresnel shell, not a translucent solid.** Opacity over a light ground
+  removes contrast instead of adding it, so a white sphere on white paper can
+  only ever look grey. Real glass is close to invisible face-on and gathers at
+  the silhouette: a faint warm tint across the body, a cool edge at the rim, one
+  specular highlight.
+- **A noise-driven glow**, after prisoner849's
+  [The Lonely Candle](https://discourse.threejs.org/t/the-lonely-candle/4097).
+  Rather than lighting a mesh and hoping, the light is a shader with procedural
+  noise and a gradient from a hot core out to transparent, so the filament
+  breathes and the guttering falls out of the noise instead of a random number.
+- **Normal blending, never additive.** On a light page you cannot make something
+  look lit by adding brightness, because the paper is already at the top of the
+  range. The glow reads as light by tinting the paper warm, which is also why
+  the pool it throws is a warm wash rather than a white one.
+
+It is lazy-loaded so it never blocks the clock, stops rendering when the tab is
+hidden or the filament is cold, and the page is complete without WebGL.
 
 The clock escalates through five states, all hung off `<main data-state>`:
 
@@ -192,12 +214,11 @@ Cell widths in the clock are measured rather than guessed, because Archivo's
 width axis changes a digit's advance from 0.657em to 0.815em across the range
 and the glyphs collide otherwise.
 
-Behind everything is a dot grid from Magic UI's
-[DotPattern](https://magicui.design/docs/components/dot-pattern), vendored in
-`components/ui/dot-pattern.tsx` with the glow variant and its client boundary
-removed: static dots need no measurement, so it renders on the server as a
-tiling SVG `<pattern>` with no JavaScript. It gives the paper a grain and warms
-as the clock runs down.
+Behind everything is grain, not dots: one SVG turbulence filter multiplied over
+the page so the paper has a tooth to it. A dot grid is a template signature
+rather than a material, and this page is meant to read as a printed surface. It
+renders on the server with no JavaScript, is fixed and pointer-events none so it
+composites once, and coarsens as the clock runs down.
 
 Every animation honours `prefers-reduced-motion`, where weight, drift and colour
 carry the escalation on their own and the bulb holds a single still frame.
