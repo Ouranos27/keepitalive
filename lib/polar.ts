@@ -16,35 +16,69 @@ export function isPolarConfigured(): boolean {
   return Boolean(process.env.POLAR_ACCESS_TOKEN && process.env.POLAR_PRODUCT_ID);
 }
 
-/**
- * Create a hosted checkout for an exact dollar amount. The product in Polar
- * must be pay-what-you-want, because the crown price changes every time
- * somebody takes it.
- */
-export async function createCheckout(input: {
+/** Polar caps metadata values at 500 characters. */
+const METADATA_MAX = 500;
+
+export type CheckoutInput = {
   amountUsd: number;
   tier: string;
   name: string | null;
   url: string | null;
   successUrl: string;
-}): Promise<string> {
+};
+
+/**
+ * The checkout body, as a pure function so it can be asserted against without
+ * a network or an account.
+ *
+ * The price is set per checkout as an **ad-hoc fixed price**, not with the
+ * top-level `amount` field. That field only applies to pay-what-you-want
+ * prices and is documented as ignored for fixed ones, so a catalog-priced
+ * product would silently charge its catalog price and every bid in this game
+ * would cost the same. `prices` overrides the catalog for this session only,
+ * which is exactly what an escalating bid needs.
+ *
+ * Nothing here identifies a person. No customer id, no external customer id,
+ * no email: Polar collects what a payment processor must on its own hosted
+ * page, and this site never asks anybody to make an account.
+ */
+export function buildCheckoutBody(input: CheckoutInput, productId: string) {
+  const cents = Math.round(input.amountUsd * 100);
+  return {
+    products: [productId],
+    prices: {
+      [productId]: [
+        {
+          amount_type: "fixed" as const,
+          price_amount: cents,
+          price_currency: "usd",
+        },
+      ],
+    },
+    success_url: input.successUrl,
+    // Read back off the webhook. The clock only ever moves from there.
+    metadata: {
+      tier: input.tier.slice(0, METADATA_MAX),
+      name: (input.name ?? "").slice(0, METADATA_MAX),
+      url: (input.url ?? "").slice(0, METADATA_MAX),
+    },
+  };
+}
+
+/**
+ * Create a hosted checkout priced at exactly this amount.
+ */
+export async function createCheckout(input: CheckoutInput): Promise<string> {
+  const productId = process.env.POLAR_PRODUCT_ID;
+  if (!productId) throw new Error("POLAR_PRODUCT_ID is not set");
+
   const response = await fetch(`${API()}/v1/checkouts/`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${process.env.POLAR_ACCESS_TOKEN}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      products: [process.env.POLAR_PRODUCT_ID],
-      amount: Math.round(input.amountUsd * 100),
-      success_url: input.successUrl,
-      // Read back off the webhook. The clock only ever moves from here.
-      metadata: {
-        tier: input.tier,
-        name: input.name ?? "",
-        url: input.url ?? "",
-      },
-    }),
+    body: JSON.stringify(buildCheckoutBody(input, productId)),
   });
 
   if (!response.ok) {

@@ -10,7 +10,7 @@
  * clock that already died.
  */
 import { INITIAL_SECONDS, applyPayment, crownPriceUsd } from "../clock";
-import type { FrozenSnapshot, LedgerEntry, Lifeline, PaymentInput, PaymentResult, SiteState } from "../types";
+import type { FrozenSnapshot, LedgerEntry, Lifeline, PaymentInput, PaymentResult, RawState } from "../types";
 import type { Store } from "./types";
 
 type World = {
@@ -22,7 +22,7 @@ type World = {
   seen: Set<string>;
 };
 
-const GLOBAL_KEY = Symbol.for("keepitalive.memory-store");
+const GLOBAL_KEY = Symbol.for("lastlight.memory-store");
 
 function world(): World {
   const globalScope = globalThis as unknown as Record<symbol, World | undefined>;
@@ -65,11 +65,11 @@ export function createMemoryStore(): Store {
   return {
     kind: "memory",
 
-    read(now, coldExpires, limit) {
-      return serialize(() => {
+    read(now, coldExpires) {
+      return serialize((): RawState => {
         const state = world();
         const expiresAt = ensureClock(state, coldExpires);
-        const ledger = limit < 0 ? [...state.ledger] : state.ledger.slice(0, limit);
+        const ledger = [...state.ledger];
 
         if (now >= expiresAt) {
           const frozen = freeze(state, expiresAt);
@@ -79,11 +79,10 @@ export function createMemoryStore(): Store {
             expires_at: frozen.died_at,
             remaining: 0,
             lifeline: frozen.lifeline,
-            crown_price: crownPriceUsd(frozen.lifeline?.amount ?? null),
             ledger,
             total_payers: state.ledger.length,
             frozen,
-          } satisfies SiteState;
+          };
         }
 
         return {
@@ -92,11 +91,10 @@ export function createMemoryStore(): Store {
           expires_at: expiresAt,
           remaining: Math.max(0, (expiresAt - now) / 1000),
           lifeline: state.lifeline,
-          crown_price: crownPriceUsd(state.lifeline?.amount ?? null),
           ledger,
           total_payers: state.ledger.length,
           frozen: null,
-        } satisfies SiteState;
+        };
       });
     },
 

@@ -22,22 +22,22 @@ const mono = localFont({
   src: [{ path: "./fonts/GeistMono-Variable.woff2", weight: "100 900", style: "normal" }],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://keepitalive.lol";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lastlight.lol";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "keepitalive.lol",
-  description: "This page dies at zero. Paying is the only thing that moves the clock.",
+  title: "lastlight.lol",
+  description: "Every payment buys seconds and a permanent link. Whoever holds the last light at zero keeps this page forever.",
   openGraph: {
-    title: "keepitalive.lol",
-    description: "This page dies at zero. Paying is the only thing that moves the clock.",
+    title: "lastlight.lol",
+    description: "Every payment buys seconds and a permanent link. Whoever holds the last light at zero keeps this page forever.",
     url: siteUrl,
-    siteName: "keepitalive.lol",
+    siteName: "lastlight.lol",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "keepitalive.lol",
+    title: "lastlight.lol",
     description: "This site dies in 24 hours unless you pay.",
   },
   robots: { index: true, follow: true },

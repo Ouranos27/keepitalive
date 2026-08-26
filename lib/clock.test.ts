@@ -125,32 +125,32 @@ test("a transfusion moves the clock and appends a ledger line", async () => {
   assert.equal(result.status === "applied" && result.seconds_added, secondsForPayment(20, INITIAL_SECONDS));
   assert.equal(result.status === "applied" && result.crowned, false, "a transfusion never takes the crown");
 
-  const state = await store.read(T0, cold(T0), 50);
+  const state = await store.read(T0, cold(T0));
   assert.equal(state.total_payers, 1);
   assert.equal(state.ledger[0].name, "a");
+  assert.equal(crownPriceUsd(state.lifeline?.amount ?? null), OPENING_CROWN_USD);
   assert.equal(state.lifeline, null);
-  assert.equal(state.crown_price, OPENING_CROWN_USD);
 });
 
 test("the crown is displaced only by paying more", async () => {
   __resetMemoryStore();
   const store = createMemoryStore();
   await store.apply(T0, cold(T0), payment("first", 5, "crown", T0));
-  let state = await store.read(T0, cold(T0), 50);
+  let state = await store.read(T0, cold(T0));
   assert.equal(state.lifeline?.name, "first");
-  assert.equal(state.crown_price, 6);
+  assert.equal(crownPriceUsd(state.lifeline?.amount ?? null), 6);
 
   // Underpaying loses the crown race but still buys time and a permanent line.
   const lost = await store.apply(T0, cold(T0), payment("second", 5.5, "crown", T0));
   assert.equal(lost.status === "applied" && lost.crowned, false);
-  state = await store.read(T0, cold(T0), 50);
+  state = await store.read(T0, cold(T0));
   assert.equal(state.lifeline?.name, "first", "the holder survives an underbid");
   assert.equal(state.ledger[0].name, "second", "the underbid is still in the ledger");
 
   await store.apply(T0, cold(T0), payment("third", 6, "crown", T0));
-  state = await store.read(T0, cold(T0), 50);
+  state = await store.read(T0, cold(T0));
   assert.equal(state.lifeline?.name, "third");
-  assert.equal(state.crown_price, 7);
+  assert.equal(crownPriceUsd(state.lifeline?.amount ?? null), 7);
 });
 
 test("simultaneous payments do not both price off the same pre-payment state", async () => {
@@ -170,7 +170,7 @@ test("simultaneous payments do not both price off the same pre-payment state", a
   const second = b.status === "applied" ? b.seconds_added : 0;
   assert.ok(second < first, "the second payment prices off a clock the first already moved");
 
-  const state = await store.read(now, expires, 50);
+  const state = await store.read(now, expires);
   const expected = expires + (first + second) * 1000;
   assert.equal(state.expires_at, expected, "no payment was lost to a race");
 });
@@ -183,7 +183,7 @@ test("a retried webhook is ignored, not paid twice", async () => {
   const retry = await store.apply(T0, cold(T0), one);
   assert.equal(first.status, "applied");
   assert.equal(retry.status, "duplicate");
-  const state = await store.read(T0, cold(T0), 50);
+  const state = await store.read(T0, cold(T0));
   assert.equal(state.total_payers, 1, "one payment, one line");
 });
 
@@ -192,11 +192,11 @@ test("death is irreversible and the snapshot is written exactly once", async () 
   const store = createMemoryStore();
   const expires = T0 + 1000;
   await store.apply(T0, expires, payment("last", 25, "crown", T0));
-  const beforeDeath = await store.read(T0, expires, 50);
+  const beforeDeath = await store.read(T0, expires);
   assert.ok(beforeDeath.alive);
 
   const afterDeath = beforeDeath.expires_at + 1;
-  const dead = await store.read(afterDeath, expires, -1);
+  const dead = await store.read(afterDeath, expires);
   assert.equal(dead.alive, false);
   assert.equal(dead.remaining, 0);
   assert.equal(dead.frozen?.total_payers, 1);
@@ -208,7 +208,7 @@ test("death is irreversible and the snapshot is written exactly once", async () 
   const late = await store.apply(afterDeath + 5000, expires, payment("late", 999, "crown", afterDeath));
   assert.equal(late.status, "dead");
 
-  const stillDead = await store.read(afterDeath + 10_000, expires, -1);
+  const stillDead = await store.read(afterDeath + 10_000, expires);
   assert.equal(stillDead.alive, false);
   assert.equal(stillDead.frozen?.died_at, dead.frozen?.died_at, "the snapshot is never rewritten");
   assert.equal(stillDead.frozen?.lifeline?.name, "last");
@@ -220,6 +220,6 @@ test("the peak the clock ever reached survives into the memorial", async () => {
   const store = createMemoryStore();
   const expires = cold(T0);
   await store.apply(T0, expires, payment("big", 2000, "crown", T0));
-  const dead = await store.read(expires + 7_200_001, expires, -1);
+  const dead = await store.read(expires + 7_200_001, expires);
   assert.equal(dead.frozen?.peak_seconds, INITIAL_SECONDS + MAX_SECONDS_PER_TX);
 });

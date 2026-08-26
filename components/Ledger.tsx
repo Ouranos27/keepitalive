@@ -50,7 +50,7 @@ export function Ledger({
                 ) : (
                   (entry.name ?? "Anonymous")
                 )}
-                {entry.crowned ? <span className="ledger__held">Lifeline</span> : null}
+                {entry.crowned ? <span className="ledger__held">Last light</span> : null}
               </span>
               <span className="ledger__amount mono">{formatUsd(entry.amount)}</span>
               <span className="ledger__added mono">

@@ -1,4 +1,5 @@
-import { INITIAL_SECONDS } from "../clock";
+import { INITIAL_SECONDS, crownPriceUsd } from "../clock";
+import { standingsFrom } from "../standings";
 import type { PaymentInput, PaymentResult, SiteState } from "../types";
 import { LIVE_LEDGER_LIMIT } from "./keys";
 import { createMemoryStore } from "./memory";
@@ -34,10 +35,25 @@ export function coldExpiresAt(now: number): number {
   return start + INITIAL_SECONDS * 1000;
 }
 
-/** Read the site. `full` pulls the entire ledger, for the memorial. */
-export function readState(options?: { full?: boolean }): Promise<SiteState> {
+/**
+ * Read the site and fold the ledger into a board.
+ *
+ * The store hands back every entry because the standings are derived from all
+ * of them. What reaches the page is the ranked board plus a recent slice of the
+ * ledger, or the whole ledger when `full` is set, which is the memorial.
+ */
+export async function readState(options?: { full?: boolean }): Promise<SiteState> {
   const now = Date.now();
-  return getStore().read(now, coldExpiresAt(now), options?.full ? -1 : LIVE_LEDGER_LIMIT);
+  const raw = await getStore().read(now, coldExpiresAt(now));
+  const lifeline = raw.frozen?.lifeline ?? raw.lifeline;
+
+  return {
+    ...raw,
+    lifeline,
+    crown_price: crownPriceUsd(lifeline?.amount ?? null),
+    standings: standingsFrom(raw.ledger, lifeline?.url ?? null),
+    ledger: options?.full ? raw.ledger : raw.ledger.slice(0, LIVE_LEDGER_LIMIT),
+  };
 }
 
 /** Apply a payment. The webhook is the only caller that matters. */

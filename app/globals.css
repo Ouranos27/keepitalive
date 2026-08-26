@@ -1,5 +1,5 @@
 /*
- * keepitalive.lol
+ * lastlight.lol
  *
  * The page is paper and it is calm. Every bit of dread is spent on one
  * element, the clock, because a page where everything is shouting reads as an
@@ -56,6 +56,10 @@
   --r-ctl: 1rem;
   --r-input: 0.625rem;
   --r-row: 0.5rem;
+
+  /* The background grain, which warms as the clock runs down. */
+  --dot: #cfcfc9;
+  --dot-opacity: 0.5;
 
   --gutter: clamp(1.25rem, 5vw, 4rem);
   --column: 68rem;
@@ -154,6 +158,80 @@ a:hover {
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--faint);
+}
+
+/* --- the background texture ----------------------------------------------- */
+
+/*
+ * A dot grid, fixed behind everything and almost invisible. It gives the paper
+ * a grain so the page reads as a printed surface rather than a blank div, and
+ * it warms as the clock runs down. Pointer-events off, no JavaScript.
+ */
+.dots {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  color: var(--dot);
+  opacity: var(--dot-opacity);
+  transition:
+    color 1.2s linear,
+    opacity 1.2s linear;
+}
+
+.page > *:not(.dots) {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- the bulb ------------------------------------------------------------- */
+
+/*
+ * The three.js canvas sits in the middle of a pool of light drawn in CSS. A
+ * filament on a white page is a small orange line and reads as nothing on its
+ * own; the pool is what makes it a light source. It shrinks and cools as the
+ * bulb burns down, and it is gone entirely at zero.
+ */
+.bulb {
+  position: relative;
+  width: clamp(7rem, 11vw, 9.5rem);
+  height: clamp(8.5rem, 13vw, 11rem);
+  display: grid;
+  place-items: center;
+}
+
+.bulb::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 20%;
+  width: calc(110% * var(--life, 1) + 35%);
+  aspect-ratio: 1;
+  translate: -50% 50%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, #ffab5e, transparent calc(78% + (1 - var(--life, 1)) * 22%)),
+    transparent 68%
+  );
+  pointer-events: none;
+  transition:
+    width 1.2s linear,
+    background 1.2s linear;
+}
+
+.bulb__scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.bulb__scene canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* --- the first screen ----------------------------------------------------- */
@@ -431,6 +509,122 @@ a:hover {
   gap: 0.65rem;
 }
 
+/* --- the standings -------------------------------------------------------- */
+
+/*
+ * The board is the busiest thing on the page after the clock, so it is given
+ * real weight: a display-size rank, the hostname as the headline of each row,
+ * and the exact cost of passing the site above printed where it cannot be
+ * missed.
+ */
+.board {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.board__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.board__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+}
+
+.board__count {
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+
+.board__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.board__row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto auto;
+  gap: 0.15rem 1.25rem;
+  align-items: center;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--r-row);
+}
+
+.board__row:nth-child(odd) {
+  background: var(--paper-sunk);
+}
+
+/* The site holding the last light is the only row that gets the accent. */
+.board__row--light {
+  background: color-mix(in oklab, var(--blood), var(--paper) 92%);
+}
+
+.board__rank {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.board__row:first-child .board__rank {
+  font-size: 1.35rem;
+  color: var(--ink);
+}
+
+.board__site {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.board__host {
+  font-size: 1rem;
+  font-weight: 620;
+  letter-spacing: -0.014em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.board__meta {
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+.board__light {
+  margin-left: 0.5rem;
+  font-weight: 620;
+  color: var(--blood);
+}
+
+.board__total {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: right;
+  min-width: 5ch;
+}
+
+.board__climb {
+  font-size: 0.75rem;
+  color: var(--ash);
+  text-align: right;
+  min-width: 13ch;
+}
+
+.board__empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--faint);
+}
+
 /* --- the ledger ----------------------------------------------------------- */
 
 .ledger {
@@ -568,7 +762,13 @@ a:hover {
   color: var(--blood);
 }
 
+[data-state="critical"] {
+  --dot: color-mix(in oklab, var(--blood), var(--paper) 55%);
+  --dot-opacity: 0.6;
+}
+
 [data-state="critical"] .ledger,
+[data-state="critical"] .board,
 [data-state="critical"] .colophon {
   opacity: 0.45;
 }
@@ -596,8 +796,14 @@ a:hover {
   --bleed: 0.22em;
 }
 
+[data-state="terminal"] {
+  --dot: color-mix(in oklab, var(--blood), var(--paper) 40%);
+  --dot-opacity: 0.7;
+}
+
 [data-state="terminal"] .hero__copy,
 [data-state="terminal"] .ledger,
+[data-state="terminal"] .board,
 [data-state="terminal"] .colophon {
   display: none;
 }
@@ -629,6 +835,8 @@ a:hover {
  * again, and it should not look like it is about to.
  */
 [data-state="dead"] {
+  --dot: #d6d6d1;
+  --dot-opacity: 0.35;
   --clock-weight: 760;
   --clock-width: 112%;
   --cell: 0.695em;
@@ -721,6 +929,16 @@ a:hover {
   .stats {
     grid-template-columns: 1fr;
     gap: 0.75rem;
+  }
+
+  .board__row {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+  }
+
+  .board__climb {
+    grid-column: 2 / -1;
+    text-align: left;
+    min-width: 0;
   }
 
   .ledger__row {

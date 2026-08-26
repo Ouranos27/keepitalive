@@ -3,6 +3,7 @@ import { formatStamp } from "@/lib/format";
 import type { SiteState } from "@/lib/types";
 import { DeadClock } from "./Countdown";
 import { Ledger } from "./Ledger";
+import { Standings } from "./Standings";
 
 /**
  * The dead state. Designed first, on purpose: it is what outlives the event,
@@ -24,7 +25,7 @@ export function Memorial({ state }: { state: SiteState }) {
   return (
     <main className="page" data-state="dead">
       <header className="masthead">
-        <span className="masthead__domain">keepitalive.lol</span>
+        <span className="masthead__domain">lastlight.lol</span>
         <span className="masthead__status">Dead</span>
       </header>
 
@@ -44,7 +45,7 @@ export function Memorial({ state }: { state: SiteState }) {
       </section>
 
       <section className="holder">
-        <p className="holder__eyebrow">The final lifeline</p>
+        <p className="holder__eyebrow">The last light</p>
         {holder ? (
           <>
             <p className="holder__name">
@@ -79,6 +80,8 @@ export function Memorial({ state }: { state: SiteState }) {
           <span className="stats__label">Longest it ever reached</span>
         </li>
       </ul>
+
+      <Standings standings={state.standings} heading="The final standings" />
 
       <Ledger
         entries={chronological}

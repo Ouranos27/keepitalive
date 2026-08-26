@@ -1,4 +1,5 @@
 import type { Tier } from "./clock";
+import type { Standing } from "./standings";
 
 /** A permanent line in the public ledger. Survives death. */
 export type LedgerEntry = {
@@ -21,7 +22,13 @@ export type LedgerEntry = {
   ts: number;
 };
 
-/** The one slot. Whoever holds it at zero holds it forever. */
+/**
+ * The one slot. Whoever holds it at zero holds it forever.
+ *
+ * The page calls this The Last Light. The code and the Redis key still say
+ * `lifeline`, which is what it was called before the rename; the two are the
+ * same thing.
+ */
 export type Lifeline = {
   name: string | null;
   url: string | null;
@@ -40,6 +47,22 @@ export type FrozenSnapshot = {
   peak_seconds: number;
 };
 
+/**
+ * What the store hands back: the world, with the ledger complete. The standings
+ * are folded out of it before it reaches a page.
+ */
+export type RawState = {
+  alive: boolean;
+  now: number;
+  expires_at: number;
+  remaining: number;
+  lifeline: Lifeline;
+  /** Every entry, newest first. */
+  ledger: LedgerEntry[];
+  total_payers: number;
+  frozen: FrozenSnapshot | null;
+};
+
 /** Everything a page render needs, alive or dead. */
 export type SiteState = {
   alive: boolean;
@@ -52,6 +75,9 @@ export type SiteState = {
   lifeline: Lifeline;
   /** Price on the button, right now. */
   crown_price: number;
+  /** Sites ranked by everything they have ever paid. */
+  standings: Standing[];
+  /** Recent entries only on the live page, all of them on the memorial. */
   ledger: LedgerEntry[];
   total_payers: number;
   frozen: FrozenSnapshot | null;

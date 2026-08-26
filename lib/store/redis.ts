@@ -1,6 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { crownPriceUsd } from "../clock";
-import type { FrozenSnapshot, LedgerEntry, Lifeline, PaymentInput, PaymentResult, SiteState } from "../types";
+import type { FrozenSnapshot, LedgerEntry, Lifeline, PaymentInput, PaymentResult, RawState } from "../types";
 import { KEY_ORDER } from "./keys";
 import { APPLY_SCRIPT, READ_SCRIPT } from "./script";
 import type { Store } from "./types";
@@ -28,11 +27,13 @@ export function createRedisStore(url: string, token: string): Store {
   return {
     kind: "redis",
 
-    async read(now, coldExpires, limit) {
+    async read(now, coldExpires): Promise<RawState> {
+      // -1: the whole ledger. The standings are folded out of it, and a partial
+      // ledger would produce a board that is quietly wrong.
       const raw = (await redis.eval(READ_SCRIPT, [...KEY_ORDER], [
         String(now),
         String(coldExpires),
-        String(limit),
+        "-1",
       ])) as [string, string, string, unknown[], number];
 
       const [status, payload, lifelineRaw, entriesRaw, length] = raw;
@@ -48,11 +49,10 @@ export function createRedisStore(url: string, token: string): Store {
           expires_at: frozen?.died_at ?? now,
           remaining: 0,
           lifeline: frozen?.lifeline ?? lifeline,
-          crown_price: crownPriceUsd(frozen?.lifeline?.amount ?? lifeline?.amount ?? null),
           ledger,
           total_payers: Number(length) || 0,
           frozen,
-        } satisfies SiteState;
+        };
       }
 
       const expiresAt = Number(payload);
@@ -62,11 +62,10 @@ export function createRedisStore(url: string, token: string): Store {
         expires_at: expiresAt,
         remaining: Math.max(0, (expiresAt - now) / 1000),
         lifeline,
-        crown_price: crownPriceUsd(lifeline?.amount ?? null),
         ledger,
         total_payers: Number(length) || 0,
         frozen: null,
-      } satisfies SiteState;
+      };
     },
 
     async apply(now, coldExpires, payment: PaymentInput): Promise<PaymentResult> {

@@ -63,12 +63,12 @@ export function Checkout({
   return (
     <form className="checkout" onSubmit={submit}>
       <h2 className="checkout__title">
-        {crown ? `Take the lifeline for ${formatUsd(crownPrice)}` : "Add time to the clock"}
+        {crown ? `Take the last light for ${formatUsd(crownPrice)}` : "Add time to the clock"}
       </h2>
       <p className="checkout__hint">
         {crown
           ? "One slot. You hold it until somebody pays more than you. If nobody does before zero, you hold it on the dead page permanently."
-          : `Buys time and a permanent line in the ledger. It does not take the lifeline. ${formatUsd(MIN_TRANSFUSION_USD)} minimum.`}
+          : `Buys time and a permanent line in the ledger. It does not take the last light. ${formatUsd(MIN_TRANSFUSION_USD)} minimum.`}
       </p>
 
       {!crown && (
