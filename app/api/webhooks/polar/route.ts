@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { normalizeName, normalizeUrl } from "@/lib/clock";
+import { config } from "@/lib/env";
 import { readOrder, verifyWebhook, type PolarEvent } from "@/lib/polar";
 import { recordPayment } from "@/lib/store";
 
@@ -17,9 +18,10 @@ const PAID_EVENTS = new Set(["order.created", "order.paid", "order.updated"]);
  * into time, because there is no time left to sell.
  */
 export async function POST(request: Request) {
-  const secret = process.env.POLAR_WEBHOOK_SECRET;
-  if (!secret) {
-    console.error("webhook received but POLAR_WEBHOOK_SECRET is unset");
+  const polar = config.polar;
+  if (!polar) {
+    // Unreachable on a production boot, which refuses to start half configured.
+    console.error("webhook received but Polar is not configured");
     return NextResponse.json({ error: "not configured" }, { status: 503 });
   }
 
@@ -31,7 +33,7 @@ export async function POST(request: Request) {
       timestamp: request.headers.get("webhook-timestamp"),
       signature: request.headers.get("webhook-signature"),
     },
-    secret,
+    polar.webhookSecret,
   );
   if (!verified) {
     return NextResponse.json({ error: "bad signature" }, { status: 403 });

@@ -8,12 +8,20 @@
  * moving part is scope failure.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { config } from "./env";
 
-const API = () =>
-  process.env.POLAR_SERVER === "sandbox" ? "https://sandbox-api.polar.sh" : "https://api.polar.sh";
+/** Sandbox and production are different hosts, not a flag on the same one. */
+export function apiBase(server: "sandbox" | "production"): string {
+  return server === "sandbox" ? "https://sandbox-api.polar.sh" : "https://api.polar.sh";
+}
 
+/**
+ * True only when the access token, the product and the webhook secret are all
+ * present. Anything less is refused at boot, because a checkout that cannot be
+ * verified by a webhook takes money and never moves the clock.
+ */
 export function isPolarConfigured(): boolean {
-  return Boolean(process.env.POLAR_ACCESS_TOKEN && process.env.POLAR_PRODUCT_ID);
+  return config.polar !== null;
 }
 
 /** Polar caps metadata values at 500 characters. */
@@ -69,16 +77,16 @@ export function buildCheckoutBody(input: CheckoutInput, productId: string) {
  * Create a hosted checkout priced at exactly this amount.
  */
 export async function createCheckout(input: CheckoutInput): Promise<string> {
-  const productId = process.env.POLAR_PRODUCT_ID;
-  if (!productId) throw new Error("POLAR_PRODUCT_ID is not set");
+  const polar = config.polar;
+  if (!polar) throw new Error("Polar is not configured");
 
-  const response = await fetch(`${API()}/v1/checkouts/`, {
+  const response = await fetch(`${apiBase(polar.server)}/v1/checkouts/`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${process.env.POLAR_ACCESS_TOKEN}`,
+      authorization: `Bearer ${polar.accessToken}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify(buildCheckoutBody(input, productId)),
+    body: JSON.stringify(buildCheckoutBody(input, polar.productId)),
   });
 
   if (!response.ok) {

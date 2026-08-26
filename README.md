@@ -65,7 +65,26 @@ simulated checkout, so the whole mechanic is playable locally. Simulated
 payments are refused in production builds unless `ALLOW_SIMULATED_PAYMENTS=1` is
 set, which exists for screenshots and nothing else.
 
-Copy `.env.example` to `.env.local` to point it at real services.
+Copy `.env.example` to `.env.local` to point it at real services. Every variable
+is listed there and resolved in one place, `lib/env.ts`, which also decides what
+is fatal.
+
+### Configuration is checked at boot
+
+A production build refuses to start on either of the two shapes that take money
+and lose it, and prints the fix:
+
+- **No Redis.** Every serverless instance would keep its own clock and ledger,
+  so a payment would land on whichever instance answered the webhook.
+- **A half-configured processor.** Any one of the three Polar variables missing
+  while the others are set means a checkout can be opened that the webhook
+  cannot verify: money taken, clock unmoved. Fatal in every environment, because
+  the failure is the shape rather than the stage.
+
+Everything else is a warning on the boot log: no processor at all (the site runs
+and refuses payments), simulated payments left on, a `CLOCK_LAUNCH_AT` in seconds
+rather than milliseconds, a relative `NEXT_PUBLIC_SITE_URL`, a `POLAR_SERVER`
+typo, missing analytics. `lib/env.test.ts` covers each case.
 
 Useful for looking at a state you would otherwise have to wait for:
 `CLOCK_LAUNCH_AT` is a unix-ms instant the clock started, so setting it into the
@@ -80,6 +99,7 @@ past starts the app near death, and setting it far enough back starts it dead.
 | `lib/store/redis.ts` | Upstash backend. |
 | `lib/store/memory.ts` | In-memory backend for dev and tests. |
 | `lib/standings.ts` | Folds the ledger into a ranked board of sites. |
+| `lib/env.ts` | Every environment variable, resolved and checked. |
 | `lib/polar.ts` | Checkout creation and Standard Webhooks verification. |
 | `app/api/webhooks/polar` | The only thing that moves the clock. |
 | `components/Countdown.tsx` | The clock, and most of the dread. |

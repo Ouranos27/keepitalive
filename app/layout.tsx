@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import { OpenPanelComponent } from "@openpanel/nextjs";
 import localFont from "next/font/local";
+import { config } from "@/lib/env";
 import "./globals.css";
 
 /**
@@ -22,7 +24,7 @@ const mono = localFont({
   src: [{ path: "./fonts/GeistMono-Variable.woff2", weight: "100 900", style: "normal" }],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lastlight.lol";
+const siteUrl = config.siteUrl;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -56,7 +58,17 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/*
+          Analytics only when a client id is configured, so a local run and a
+          preview deploy send nothing. There is one page here, so screen views
+          are the whole of what there is to measure.
+        */}
+        {config.analyticsClientId ? (
+          <OpenPanelComponent clientId={config.analyticsClientId} trackScreenViews />
+        ) : null}
+      </body>
     </html>
   );
 }

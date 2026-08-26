@@ -7,6 +7,7 @@ import {
   normalizeName,
   normalizeUrl,
 } from "@/lib/clock";
+import { config } from "@/lib/env";
 import { createCheckout, isPolarConfigured } from "@/lib/polar";
 import { readState, recordPayment } from "@/lib/store";
 
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
   if (!isPolarConfigured()) {
     // No processor wired up. Locally that means the mechanic stays playable;
     // in production it means the site is misconfigured and takes no money.
-    if (process.env.NODE_ENV === "production" && process.env.ALLOW_SIMULATED_PAYMENTS !== "1") {
+    if (config.production && !config.allowSimulatedPayments) {
       return NextResponse.json({ error: "Payments are not configured." }, { status: 503 });
     }
     const result = await recordPayment({
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ simulated: true, result });
   }
 
-  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin;
+  const origin = config.siteUrl;
   try {
     const checkoutUrl = await createCheckout({
       amountUsd: amount,

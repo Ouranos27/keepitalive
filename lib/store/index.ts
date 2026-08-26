@@ -1,4 +1,5 @@
-import { INITIAL_SECONDS, crownPriceUsd } from "../clock";
+import { crownPriceUsd } from "../clock";
+import { coldExpiresAt, config } from "../env";
 import { standingsFrom } from "../standings";
 import type { PaymentInput, PaymentResult, SiteState } from "../types";
 import { LIVE_LEDGER_LIMIT } from "./keys";
@@ -9,30 +10,19 @@ import type { Store } from "./types";
 let store: Store | null = null;
 
 /**
- * Upstash if it is configured, memory otherwise. There is no third option and
- * no fallback at runtime: a production deploy without Redis would hand every
- * serverless instance its own private clock.
+ * Upstash if it is configured, memory otherwise.
+ *
+ * Falling back to memory is correct locally and catastrophic in production,
+ * where every serverless instance would keep a private clock and a webhook
+ * would land on whichever one answered. lib/env.ts refuses to boot a
+ * production build in that state, so by the time this runs the choice is safe.
  */
 export function getStore(): Store {
   if (store) return store;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  store = url && token ? createRedisStore(url, token) : createMemoryStore();
+  store = config.redis
+    ? createRedisStore(config.redis.url, config.redis.token)
+    : createMemoryStore();
   return store;
-}
-
-/**
- * When the clock should expire if it has never been set.
- *
- * CLOCK_LAUNCH_AT pins the start to a deploy-time instant so that a cold start
- * an hour after launch does not hand the site a fresh 24 hours. Without it the
- * clock starts at the first read, which is what you want locally and nowhere
- * else.
- */
-export function coldExpiresAt(now: number): number {
-  const launchAt = Number(process.env.CLOCK_LAUNCH_AT);
-  const start = Number.isFinite(launchAt) && launchAt > 0 ? launchAt : now;
-  return start + INITIAL_SECONDS * 1000;
 }
 
 /**
@@ -62,5 +52,5 @@ export function recordPayment(payment: PaymentInput): Promise<PaymentResult> {
   return getStore().apply(now, coldExpiresAt(now), payment);
 }
 
-export { LIVE_LEDGER_LIMIT };
+export { LIVE_LEDGER_LIMIT, coldExpiresAt };
 export type { Store };
