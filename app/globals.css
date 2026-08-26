@@ -17,21 +17,26 @@
 :root {
   color-scheme: light;
 
-  /* Cool paper, not cream. Clinical rather than cosy. */
-  --paper: #f3f3f1;
+  /*
+   * The lit room, as a fallback. The live palette is computed in lib/theme.ts
+   * and set inline on <main>, because it has to interpolate toward a dark room
+   * without any text dropping below AA on the way. These values are what the
+   * page paints with before that arrives.
+   */
+  --paper: rgb(243 243 241);
   --paper-sunk: #ececea;
-  --card: #fbfbfa;
-  --ink: #121211;
-  --ash: #6e6e69;
-  --faint: #a3a39d;
-  --rule: #dcdcd8;
+  --card: rgb(251 251 250);
+  --ink: rgb(18 18 17);
+  --ash: rgb(92 92 87);
+  --faint: rgb(108 108 102);
+  --rule: rgb(220 220 216);
 
   /*
    * One accent, locked to the page: arterial. It is spent entirely on the
    * clock, and only in the last ten minutes, so its arrival is information.
    */
-  --blood: oklch(0.5 0.19 26);
-  --blood-soft: oklch(0.5 0.19 26 / 0.28);
+  --blood: rgb(178 34 26);
+  --blood-soft: color-mix(in oklab, var(--blood), transparent 72%);
 
   /*
    * The board's tiers, graded by heat rather than by medal: the closer to the
@@ -68,8 +73,14 @@
   --r-input: 0.625rem;
   --r-row: 0.5rem;
 
-  /* How much tooth the paper has. It coarsens as the clock runs down. */
+  /* How much tooth the paper has. Set with the palette; none in the dark. */
   --grain: 0.055;
+  /* 1 while the filament is steady, dipping as it gutters. Written by the bulb. */
+  --flicker: 1;
+
+  /* The extrusion on the controls, which is the only material on the page. */
+  --lift: #ffffff;
+  --cast: rgb(28 26 22 / 0.22);
 
   --gutter: clamp(1.25rem, 5vw, 4rem);
   --column: 68rem;
@@ -89,13 +100,13 @@ body {
 }
 
 html {
-  background: var(--paper);
+  background: var(--root-ground, var(--paper));
 }
 
 body {
   min-height: 100svh;
   color: var(--ink);
-  background: var(--paper);
+  background: transparent;
   font-family: var(--font-display), "Archivo", system-ui, sans-serif;
   font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
@@ -134,14 +145,34 @@ a:hover {
 /* --- shell ---------------------------------------------------------------- */
 
 .page {
+  /*
+   * The palette arrives here as inline custom properties, so anything derived
+   * from it has to be declared here too. A `--x: var(--y)` written on :root is
+   * substituted using :root's value of --y, which would freeze it to the lit
+   * fallback and leave the dark room reading dark text on a dark ground.
+   *
+   * Text colour is set here rather than on body for the same reason.
+   */
+  color: var(--ink);
+  --clock-color: var(--ink);
+  --blood-soft: color-mix(in oklab, var(--blood), transparent 72%);
+  background: var(--paper);
   min-height: 100svh;
+  transition:
+    background-color 1.2s linear,
+    color 1.2s linear;
   padding: clamp(1rem, 2.5vh, 1.75rem) var(--gutter) var(--gutter);
   display: flex;
   flex-direction: column;
   gap: clamp(2.5rem, 7vh, 5rem);
 }
 
-.page > * {
+/*
+ * The reading column. The two full-bleed layers are excluded: they are fixed
+ * to the viewport, and constraining them to the column made the grain darken
+ * only the middle of the page.
+ */
+.page > *:not(.grain):not(.roomlight) {
   width: 100%;
   max-width: var(--column);
   margin-inline: auto;
@@ -170,6 +201,29 @@ a:hover {
   color: var(--faint);
 }
 
+/* --- the room ------------------------------------------------------------- */
+
+/*
+ * The page dips when the filament does. One fixed, pointer-events-none layer
+ * whose opacity is driven by a custom property the bulb writes directly, so a
+ * guttering bulb darkens the room without React re-rendering anything.
+ *
+ * Only while the lights are on: once the bulb is out there is nothing left to
+ * flicker.
+ */
+.roomlight {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: #000;
+  opacity: calc((1 - var(--flicker, 1)) * 0.09);
+}
+
+[data-room="dark"] .roomlight {
+  display: none;
+}
+
 /* --- the background texture ----------------------------------------------- */
 
 /*
@@ -189,7 +243,7 @@ a:hover {
   transition: opacity 1.2s linear;
 }
 
-.page > *:not(.grain) {
+.page > *:not(.grain):not(.roomlight) {
   position: relative;
   z-index: 1;
 }
@@ -380,13 +434,13 @@ a:hover {
   font: inherit;
   text-align: left;
   color: var(--ink);
-  background: #fbfbfa;
+  background: var(--card);
   border-radius: var(--r-ctl);
   padding: 0.85rem 1.15rem;
   box-shadow:
-    inset 0 1px 0 0 #ffffff,
+    inset 0 1px 0 0 var(--lift),
     0 1px 1px 0 rgb(28 26 22 / 0.06),
-    0 6px 14px -6px rgb(28 26 22 / 0.22);
+    0 6px 14px -6px var(--cast);
   transition:
     transform 0.14s var(--ease),
     box-shadow 0.14s var(--ease),
@@ -411,16 +465,16 @@ a:hover {
 .button:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow:
-    inset 0 1px 0 0 #ffffff,
+    inset 0 1px 0 0 var(--lift),
     0 1px 1px 0 rgb(28 26 22 / 0.06),
-    0 10px 20px -8px rgb(28 26 22 / 0.26);
+    0 10px 20px -8px var(--cast);
 }
 
 .button:active:not(:disabled) {
   transform: translateY(1px);
   box-shadow:
     inset 0 2px 5px 0 rgb(28 26 22 / 0.16),
-    inset 0 -1px 0 0 #ffffff;
+    inset 0 -1px 0 0 var(--lift);
 }
 
 .button:focus-visible {
@@ -445,7 +499,7 @@ a:hover {
 }
 
 .button--primary .button__note {
-  color: rgb(243 243 241 / 0.72);
+  color: color-mix(in oklab, var(--paper), transparent 28%);
 }
 
 .button--primary:hover:not(:disabled) {
@@ -470,12 +524,12 @@ a:hover {
   max-width: 30rem;
   text-align: left;
   padding: clamp(1.25rem, 3vw, 1.75rem);
-  background: #fbfbfa;
+  background: var(--card);
   border-radius: var(--r-panel);
   box-shadow:
-    inset 0 1px 0 0 #ffffff,
+    inset 0 1px 0 0 var(--lift),
     0 1px 1px 0 rgb(28 26 22 / 0.06),
-    0 14px 30px -14px rgb(28 26 22 / 0.28);
+    0 14px 30px -14px var(--cast);
 }
 
 .checkout__title {
@@ -851,6 +905,42 @@ a:hover {
   gap: 0.3rem 1.5rem;
 }
 
+/* --- the dark room -------------------------------------------------------- */
+
+/*
+ * The clay lights from above, so in the dark the highlight becomes a faint
+ * rim rather than white, and the cast shadow deepens. Everything else follows
+ * the palette on its own.
+ */
+[data-room="dark"] {
+  --lift: rgb(255 255 255 / 0.07);
+  --cast: rgb(0 0 0 / 0.55);
+}
+
+[data-room="dark"] .button {
+  background: var(--card);
+}
+
+[data-room="dark"] .button--primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+[data-room="dark"] .button--primary:hover:not(:disabled) {
+  background: #ffffff;
+}
+
+[data-room="dark"] .field input {
+  background: var(--paper);
+  border-color: var(--rule);
+}
+
+[data-room="dark"] .site--t1,
+[data-room="dark"] .site--t2,
+[data-room="dark"] .site--t3 {
+  background: color-mix(in oklab, var(--tier), var(--card) 88%);
+}
+
 /* --- the escalation ------------------------------------------------------- */
 
 /*
@@ -891,10 +981,6 @@ a:hover {
   color: var(--blood);
 }
 
-[data-state="critical"] {
-  --grain: 0.085;
-}
-
 [data-state="critical"] .ledger,
 [data-state="critical"] .board,
 [data-state="critical"] .colophon {
@@ -922,10 +1008,6 @@ a:hover {
   --ghost-warm: oklch(0.34 0.13 26 / 0.65);
   --ghost-cool: oklch(0.34 0.13 26 / 0.4);
   --bleed: 0.22em;
-}
-
-[data-state="terminal"] {
-  --grain: 0.11;
 }
 
 [data-state="terminal"] .hero__copy,
@@ -962,7 +1044,6 @@ a:hover {
  * again, and it should not look like it is about to.
  */
 [data-state="dead"] {
-  --grain: 0.04;
   --clock-weight: 760;
   --clock-width: 112%;
   --cell: 0.695em;

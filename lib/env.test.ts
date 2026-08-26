@@ -62,6 +62,52 @@ test("production without Redis refuses to boot", () => {
   assert.throws(() => assertConfig(env), /Refusing to start/);
 });
 
+test("a Vercel KV store is accepted under its own variable names", () => {
+  // Connecting Upstash from the Vercel dashboard may inject either naming.
+  // Refusing the KV_ pair would take down a correctly provisioned project.
+  const env = {
+    ...LIVE,
+    UPSTASH_REDIS_REST_URL: undefined,
+    UPSTASH_REDIS_REST_TOKEN: undefined,
+    KV_REST_API_URL: "https://example.upstash.io",
+    KV_REST_API_TOKEN: "kv-token",
+  };
+  assert.deepEqual(readConfig(env).redis, {
+    url: "https://example.upstash.io",
+    token: "kv-token",
+  });
+  assert.deepEqual(inspectConfig(env), []);
+});
+
+test("the UPSTASH pair wins when both are present", () => {
+  const env = {
+    ...LIVE,
+    KV_REST_API_URL: "https://wrong.upstash.io",
+    KV_REST_API_TOKEN: "wrong",
+  };
+  assert.equal(readConfig(env).redis?.url, "https://example.upstash.io");
+});
+
+test("a redis:// connection string in place of the REST URL is fatal", () => {
+  // Vercel injects both. The REST client cannot speak the protocol URL, and
+  // the failure would otherwise surface at the first read rather than at boot.
+  const env = { ...LIVE, UPSTASH_REDIS_REST_URL: "redis://default:pw@example.upstash.io:6379" };
+  assert.deepEqual(fatalKeys(env), ["UPSTASH_REDIS_REST_URL"]);
+  assert.match(inspectConfig(env)[0].message, /REST URL/);
+});
+
+test("a half-present KV pair names the KV variables, not the UPSTASH ones", () => {
+  const env = {
+    ...LIVE,
+    UPSTASH_REDIS_REST_URL: undefined,
+    UPSTASH_REDIS_REST_TOKEN: undefined,
+    KV_REST_API_URL: "https://example.upstash.io",
+  };
+  const problem = inspectConfig(env).find((p) => p.level === "fatal");
+  assert.equal(problem?.key, "KV_REST_API_URL");
+  assert.match(problem!.message, /KV_REST_API_TOKEN/);
+});
+
 test("half a Redis is no Redis", () => {
   const env = { ...LIVE, UPSTASH_REDIS_REST_TOKEN: undefined };
   assert.equal(readConfig(env).redis, null);

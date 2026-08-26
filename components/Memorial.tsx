@@ -1,4 +1,5 @@
 import { formatDuration, formatUsd } from "@/lib/clock";
+import { paletteFor, paletteVars } from "@/lib/theme";
 import { formatStamp } from "@/lib/format";
 import type { SiteState } from "@/lib/types";
 import { DeadBulb } from "./DeadBulb";
@@ -26,7 +27,12 @@ export function Memorial({ state }: { state: SiteState }) {
   const chronological = [...state.ledger].reverse();
 
   return (
-    <main className="page" data-state="dead">
+    <main
+      className="page"
+      data-state="dead"
+      data-room="dark"
+      style={{ ...paletteVars(paletteFor(0)) } as React.CSSProperties}
+    >
       <PaperGrain />
 
       <header className="masthead">

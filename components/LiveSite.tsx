@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { useReducedMotion } from "motion/react";
 import {
   INITIAL_SECONDS,
@@ -10,6 +11,7 @@ import {
   degradationState,
   formatUsd,
 } from "@/lib/clock";
+import { paletteFor, paletteVars, rgb } from "@/lib/theme";
 import { useServerClock } from "@/lib/useServerClock";
 import type { SiteState } from "@/lib/types";
 import { Checkout } from "./Checkout";
@@ -49,8 +51,36 @@ export function LiveSite({ initial }: { initial: SiteState }) {
    */
   const life = Math.sqrt(Math.max(0, Math.min(1, remaining / INITIAL_SECONDS)));
 
+  /*
+   * The bulb is the light source, so the room it lights is derived from the
+   * same clock. The palette is computed rather than authored because it has to
+   * stay readable at every point of the transition; see lib/theme.ts.
+   */
+  const palette = paletteFor(remaining);
+
+  // The page paints its own ground, but overscroll shows the document's, so
+  // the root has to follow the room or the dark page flashes white at the edge.
+  const painted = useRef<string | null>(null);
+  useEffect(() => {
+    const ground = rgb(palette.bg);
+    if (painted.current === ground) return;
+    painted.current = ground;
+    document.documentElement.style.setProperty("--root-ground", ground);
+  }, [palette.bg]);
+
   return (
-    <main className="page" data-state={phase}>
+    <main
+      className="page"
+      data-state={phase}
+      data-room={palette.dark ? "dark" : "lit"}
+      style={paletteVars(palette) as React.CSSProperties}
+    >
+      {/*
+        The room dips when the filament does. The bulb writes --flicker
+        straight to the document, so this darkens without re-rendering
+        anything.
+      */}
+      <span className="roomlight" />
       <PaperGrain />
 
       <header className="masthead">

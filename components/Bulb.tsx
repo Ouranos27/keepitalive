@@ -75,6 +75,26 @@ function bulbProfile(): THREE.Vector2[] {
   return spline.getPoints(90).map((p) => new THREE.Vector2(Math.max(p.x, 0), p.y));
 }
 
+/**
+ * The same value noise on the CPU, in one dimension.
+ *
+ * The shader's noise is per-fragment, so there is no single number in it to
+ * hand to anything else. This produces one global gutter value per frame,
+ * which drives the filament, the lamp, the shader's overall alpha and the
+ * brightness of the room, so all four dip together instead of drifting.
+ */
+function hash1(n: number): number {
+  const s = Math.sin(n * 127.1) * 43758.5453123;
+  return s - Math.floor(s);
+}
+
+function noise1(x: number): number {
+  const i = Math.floor(x);
+  const f = x - i;
+  const u = f * f * (3 - 2 * f);
+  return hash1(i) * (1 - u) + hash1(i + 1) * u;
+}
+
 /** Compact value noise. Enough for a flame, and cheaper than Perlin. */
 const NOISE = `
   float hash(vec3 p) {
@@ -219,6 +239,7 @@ export function Bulb({ life, reduceMotion }: { life: number; reduceMotion: boole
         uTime: { value: 0 },
         uLit: { value: 1 },
         uWobble: { value: 1 },
+        uGutter: { value: 1 },
       },
       vertexShader: `
         varying vec3 vPos;
@@ -233,6 +254,7 @@ export function Bulb({ life, reduceMotion }: { life: number; reduceMotion: boole
         uniform float uTime;
         uniform float uLit;
         uniform float uWobble;
+        uniform float uGutter;
         varying vec3 vPos;
         void main() {
           float d = length(vPos);
@@ -244,7 +266,7 @@ export function Bulb({ life, reduceMotion }: { life: number; reduceMotion: boole
           float n = noise(vPos * 2.6 + vec3(0.0, uTime * 0.9, uTime * 0.35));
           float wobble = mix(1.0, 0.55 + n * 0.75, uWobble);
 
-          float alpha = pow(core, 1.25) * 0.95 * uLit * wobble;
+          float alpha = pow(core, 1.25) * 0.95 * uLit * wobble * uGutter;
           gl_FragColor = vec4(uColour, alpha);
         }
       `,
@@ -292,6 +314,22 @@ export function Bulb({ life, reduceMotion }: { life: number; reduceMotion: boole
     const clock = new THREE.Clock();
     let frame = 0;
 
+    /*
+     * The room dips with the filament. This writes a custom property straight
+     * to the document rather than lifting the value into React: it changes
+     * every frame, and a state update per frame would re-render the page sixty
+     * times a second to move one number.
+     */
+    const room = document.documentElement;
+    let reported = -1;
+    const reportFlicker = (value: number) => {
+      // Only on a visible change, so the style engine is not invalidated for
+      // differences nobody can see.
+      if (Math.abs(value - reported) < 0.02) return;
+      reported = value;
+      room.style.setProperty("--flicker", value.toFixed(2));
+    };
+
     const render = () => {
       frame = requestAnimationFrame(render);
       const { life: value, reduceMotion: still } = target.current;
@@ -305,11 +343,21 @@ export function Bulb({ life, reduceMotion }: { life: number; reduceMotion: boole
 
       const brightness = value <= 0 ? 0 : 0.35 + value * 0.65;
 
-      filamentMaterial.color.copy(colour).multiplyScalar(Math.max(brightness, 0.06));
+      /*
+       * A healthy filament is steady. A failing one gutters, and gutters
+       * deeper the closer it gets. One number, shared by everything that has
+       * to dip at the same instant.
+       */
+      const depth = (1 - value) * 0.6;
+      const gutter = still || value <= 0 ? 1 : 1 - depth * (1 - noise1(t * 3.6));
+      reportFlicker(gutter);
+
+      filamentMaterial.color.copy(colour).multiplyScalar(Math.max(brightness * gutter, 0.06));
       lamp.color.copy(colour);
-      lamp.intensity = brightness * 4.2;
+      lamp.intensity = brightness * gutter * 4.2;
 
       glowMaterial.uniforms.uTime.value = t;
+      glowMaterial.uniforms.uGutter.value = gutter;
       glowMaterial.uniforms.uLit.value = brightness;
       // A healthy filament is steady. A dying one is mostly noise.
       glowMaterial.uniforms.uWobble.value = still ? 0 : 0.2 + (1 - value) * 0.8;
@@ -358,6 +406,7 @@ export function Bulb({ life, reduceMotion }: { life: number; reduceMotion: boole
 
     return () => {
       if (frame) cancelAnimationFrame(frame);
+      room.style.removeProperty("--flicker");
       document.removeEventListener("visibilitychange", onVisibility);
       observer.disconnect();
       scene.traverse((object) => {

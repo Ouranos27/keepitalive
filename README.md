@@ -69,6 +69,14 @@ Copy `.env.example` to `.env.local` to point it at real services. Every variable
 is listed there and resolved in one place, `lib/env.ts`, which also decides what
 is fatal.
 
+Connecting a Redis store from the Vercel dashboard injects the credentials for
+you, under either naming: the Upstash integration uses the `UPSTASH_REDIS_REST_*`
+names that `Redis.fromEnv()` reads, while stores that came through Vercel KV
+carry `KV_REST_API_*`. Both are accepted, so nothing has to be copied by hand. A
+Vercel store also injects a `redis://` connection string; that is the protocol
+URL rather than the REST endpoint this client speaks, and pasting it in is
+caught at boot rather than at the first read.
+
 ### Configuration is checked at boot
 
 A production build refuses to start on either of the two shapes that take money
@@ -100,6 +108,7 @@ past starts the app near death, and setting it far enough back starts it dead.
 | `lib/store/memory.ts` | In-memory backend for dev and tests. |
 | `lib/standings.ts` | Folds the ledger into a ranked board of sites. |
 | `lib/env.ts` | Every environment variable, resolved and checked. |
+| `lib/theme.ts` | The room, and the palette it is lit by. |
 | `lib/polar.ts` | Checkout creation and Standard Webhooks verification. |
 | `app/api/webhooks/polar` | The only thing that moves the clock. |
 | `components/Countdown.tsx` | The clock, and most of the dread. |
@@ -227,7 +236,37 @@ Four things make it read as lit glass rather than a grey ball on a stick:
 It is lazy-loaded so it never blocks the clock, stops rendering when the tab is
 hidden or the filament is cold, and the page is complete without WebGL.
 
-The clock escalates through five states, all hung off `<main data-state>`:
+### The room
+
+The bulb is not decoration, it is the light source, and the page is lit by it.
+As the filament burns down the room dims; when the bulb goes, the site is in the
+dark for good and the memorial stays there.
+
+That transition has an accessibility problem that is easy to ship without
+noticing: interpolating a light page into a dark one passes through a band where
+near-black text and near-white text **both** fail against the background. There
+is no crossover point where a straight swap is readable. So the dimming stops
+while the page is still comfortably light, and the page crosses the bad band in
+one step, which is the lights going out. Both sides of that step clear 6:1.
+
+Because the invariant has to hold at every second rather than at the two ends,
+the palette is computed in `lib/theme.ts` rather than authored in CSS, and
+`theme.test.ts` sweeps the whole clock and fails if any token drops below WCAG
+AA against either the page or a card. The accent moves with the room for the
+same reason: no single red clears AA on paper and on near-black.
+
+Writing that test caught a bug that predated it. The old tertiary grey was
+2.25:1 on paper, which is nowhere near AA, and had been there since the first
+light design.
+
+The bulb's guttering drives the room. One value per frame, shared by the
+filament, the lamp, the glow shader and a fixed overlay, so when the light dips
+the page dips with it. The bulb writes it straight to the document as a custom
+property; lifting a per-frame value into React state would re-render the page
+sixty times a second to move one number.
+
+On top of that, the clock escalates through five states, all hung off
+`<main data-state>`:
 
 | Remaining | State |
 | --- | --- |

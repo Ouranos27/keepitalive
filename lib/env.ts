@@ -48,9 +48,31 @@ function trimmed(value: string | undefined): string | null {
   return text ? text : null;
 }
 
+/**
+ * The credential pairs a Redis store can arrive under, in priority order.
+ *
+ * Connecting Upstash from the Vercel Marketplace does not inject one fixed set
+ * of names: the native Upstash integration uses the UPSTASH_ names that
+ * `Redis.fromEnv()` reads, while stores that came through Vercel KV carry the
+ * KV_ names. Accepting both means the deploy works whichever one the dashboard
+ * hands over, and nobody has to hand-copy credentials to satisfy this app.
+ */
+const REDIS_PAIRS = [
+  ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
+  ["KV_REST_API_URL", "KV_REST_API_TOKEN"],
+] as const;
+
+function readRedis(env: Env): { url: string; token: string; source: string } | null {
+  for (const [urlKey, tokenKey] of REDIS_PAIRS) {
+    const url = trimmed(env[urlKey]);
+    const token = trimmed(env[tokenKey]);
+    if (url && token) return { url, token, source: urlKey };
+  }
+  return null;
+}
+
 export function readConfig(env: Env): Config {
-  const redisUrl = trimmed(env.UPSTASH_REDIS_REST_URL);
-  const redisToken = trimmed(env.UPSTASH_REDIS_REST_TOKEN);
+  const redis = readRedis(env);
 
   const accessToken = trimmed(env.POLAR_ACCESS_TOKEN);
   const productId = trimmed(env.POLAR_PRODUCT_ID);
@@ -59,7 +81,7 @@ export function readConfig(env: Env): Config {
   const launchAt = Number(env.CLOCK_LAUNCH_AT);
 
   return {
-    redis: redisUrl && redisToken ? { url: redisUrl, token: redisToken } : null,
+    redis: redis ? { url: redis.url, token: redis.token } : null,
     // All three or nothing. Two out of three is the dangerous shape: it takes
     // money it cannot credit.
     polar:
@@ -95,14 +117,32 @@ export function inspectConfig(env: Env): Problem[] {
     // ALLOW_SIMULATED_PAYMENTS marks an instance as a demo, so a production
     // build driven for screenshots is not held to the production rules.
     const demo = config.allowSimulatedPayments;
+
+    // Name the pair that is half there, rather than the first one on the list.
+    const halfPresent = REDIS_PAIRS.find(
+      ([urlKey, tokenKey]) => trimmed(env[urlKey]) !== null || trimmed(env[tokenKey]) !== null,
+    );
+    const [urlKey, tokenKey] = halfPresent ?? REDIS_PAIRS[0];
+
     problems.push({
       level: config.production && !demo ? "fatal" : "warn",
-      key: "UPSTASH_REDIS_REST_URL",
+      key: urlKey,
       message:
         config.production && !demo
-          ? "No Redis configured. Every serverless instance would keep its own clock and ledger, so payments would land on whichever instance answered the webhook. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN."
+          ? `No Redis configured. Every serverless instance would keep its own clock and ledger, so payments would land on whichever instance answered the webhook. Set ${urlKey} and ${tokenKey}, or connect a Redis store in the Vercel dashboard, which injects them for you.`
           : "No Redis configured, running on the in-memory store. State resets when the process does.",
     });
+  } else {
+    // A Vercel Redis store also injects a redis:// connection string. It is not
+    // the REST endpoint this client speaks, and pasting it here fails at the
+    // first read rather than at boot, which is the worst time to find out.
+    if (!/^https?:\/\//i.test(config.redis.url)) {
+      problems.push({
+        level: "fatal",
+        key: "UPSTASH_REDIS_REST_URL",
+        message: `The Redis URL is "${config.redis.url.slice(0, 12)}...", which is not an https REST endpoint. This app talks to Upstash over REST, so it needs the REST URL (https://<name>.upstash.io), not the redis:// connection string.`,
+      });
+    }
   }
 
   const polarKeys = ["POLAR_ACCESS_TOKEN", "POLAR_PRODUCT_ID", "POLAR_WEBHOOK_SECRET"] as const;
