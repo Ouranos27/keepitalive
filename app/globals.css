@@ -33,6 +33,16 @@
   --blood: oklch(0.5 0.19 26);
   --blood-soft: oklch(0.5 0.19 26 / 0.28);
 
+  /*
+   * The board's tiers, graded by heat rather than by medal: the closer to the
+   * top, the warmer and brighter. Chroma is kept low enough that none of them
+   * competes with the arterial accent, which stays reserved for the clock and
+   * for whoever is holding the Last Light.
+   */
+  --tier-1: oklch(0.68 0.115 82);
+  --tier-2: oklch(0.62 0.04 238);
+  --tier-3: oklch(0.53 0.055 70);
+
   /* The clock's dread dials. Every one of them is zero until it is not. */
   --split: 0em; /* how far the misregistered copies drift apart */
   --ghost-warm: transparent;
@@ -614,6 +624,26 @@ a:hover {
   overflow-wrap: anywhere;
 }
 
+/* Every outbound link, in one place. See components/ui/site-link.tsx. */
+.outlink {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.22em;
+}
+
+.outlink__icon {
+  flex: none;
+  align-self: center;
+  width: 0.75em;
+  height: 0.75em;
+  color: var(--faint);
+  transition: color 0.2s var(--ease);
+}
+
+.outlink:hover .outlink__icon {
+  color: var(--ink);
+}
+
 .site__total {
   grid-area: total;
   font-size: 1.05rem;
@@ -666,18 +696,43 @@ a:hover {
   color: var(--faint);
 }
 
-/* First place gets the numeral, not a medal. */
-.site--top {
-  border-color: color-mix(in oklab, var(--ink), var(--rule) 78%);
+/*
+ * Colour lands on the numeral, where it labels the position, and as a wash on
+ * the card that is barely past the paper. Anything stronger turns a deadpan
+ * board into a podium.
+ */
+.site--t1 {
+  --tier: var(--tier-1);
 }
 
-.site--top .site__rank {
+.site--t2 {
+  --tier: var(--tier-2);
+}
+
+.site--t3 {
+  --tier: var(--tier-3);
+}
+
+.site--t1,
+.site--t2,
+.site--t3 {
+  background: color-mix(in oklab, var(--tier), var(--card) 96%);
+  border-color: color-mix(in oklab, var(--tier), var(--rule) 74%);
+}
+
+.site--t1 .site__rank,
+.site--t2 .site__rank,
+.site--t3 .site__rank {
+  color: var(--tier);
+}
+
+/* First place also gets the size, because it is the only one worth defending. */
+.site--t1 .site__rank {
   font-size: 1.4rem;
-  color: var(--ink);
 }
 
-.site--top .site__host,
-.site--top .site__total {
+.site--t1 .site__host,
+.site--t1 .site__total {
   font-size: 1.15rem;
 }
 

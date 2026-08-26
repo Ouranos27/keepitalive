@@ -1,5 +1,6 @@
 import { formatAdded, formatUsd } from "@/lib/clock";
 import { costToClimb, type Standing } from "@/lib/standings";
+import { SiteLink } from "./ui/site-link";
 
 /**
  * The board.
@@ -49,20 +50,19 @@ export function Standings({
             return (
               <li
                 key={site.host}
-                className={`site${site.rank === 1 ? " site--top" : ""}`}
+                /*
+                 * The top three are colour-graded by heat: the closer to the
+                 * light, the warmer. Everyone below them is one neutral field.
+                 */
+                className={`site ${site.rank <= 3 ? `site--t${site.rank}` : "site--field"}`}
               >
                 {/* Zero-padded so the column holds its width down the board. */}
                 <span className="site__rank mono">{String(site.rank).padStart(2, "0")}</span>
 
                 <span className="site__title">
-                  <a
-                    className="site__host"
-                    href={site.url}
-                    rel="sponsored nofollow noopener"
-                    target="_blank"
-                  >
+                  <SiteLink className="site__host" href={site.url}>
                     {site.host}
-                  </a>
+                  </SiteLink>
                   {site.holds_lifeline ? (
                     <span className="site__badge">Holds the last light</span>
                   ) : null}

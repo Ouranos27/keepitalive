@@ -1,6 +1,7 @@
 import { MIN_TRANSFUSION_USD, formatAdded, formatUsd } from "@/lib/clock";
 import { formatTime } from "@/lib/format";
 import type { LedgerEntry } from "@/lib/types";
+import { SiteLink } from "./ui/site-link";
 
 /**
  * The permanent public record. Every payment appends one line, and the ledger
@@ -44,9 +45,7 @@ export function Ledger({
             <li key={entry.id} className={`ledger__row${entry.crowned ? " ledger__row--crown" : ""}`}>
               <span className="ledger__who">
                 {entry.url && entry.name ? (
-                  <a href={entry.url} rel="sponsored nofollow noopener" target="_blank">
-                    {entry.name}
-                  </a>
+                  <SiteLink href={entry.url}>{entry.name}</SiteLink>
                 ) : (
                   (entry.name ?? "Anonymous")
                 )}

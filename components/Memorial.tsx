@@ -5,6 +5,7 @@ import { DeadBulb } from "./DeadBulb";
 import { DeadClock } from "./Countdown";
 import { PaperGrain } from "./ui/paper-grain";
 import { Ledger } from "./Ledger";
+import { SiteLink } from "./ui/site-link";
 import { Standings } from "./Standings";
 
 /**
@@ -55,9 +56,7 @@ export function Memorial({ state }: { state: SiteState }) {
           <>
             <p className="holder__name">
               {holder.url ? (
-                <a href={holder.url} rel="sponsored nofollow noopener" target="_blank">
-                  {holder.name ?? "Anonymous"}
-                </a>
+                <SiteLink href={holder.url}>{holder.name ?? "Anonymous"}</SiteLink>
               ) : (
                 (holder.name ?? "Anonymous")
               )}

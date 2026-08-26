@@ -86,6 +86,7 @@ past starts the app near death, and setting it far enough back starts it dead.
 | `components/Bulb.tsx` | The three.js bulb, lazy-loaded. |
 | `components/ui/paper-grain.tsx` | The background tooth, one SVG filter. |
 | `components/Standings.tsx` | The board. |
+| `components/ui/site-link.tsx` | Every outbound link, and its rel attributes. |
 | `components/Memorial.tsx` | The dead state. |
 
 ### Redis keys
@@ -159,9 +160,23 @@ because a page where everything is shouting reads as an arcade and a page where
 one thing is wrong reads as a problem.
 
 Archivo carries the display voice, using its width axis so the clock can widen
-as it degrades. Geist Mono carries the ledger. Both are self-hosted. One accent
-colour, arterial red, withheld until the last ten minutes so its arrival is
-information rather than decoration.
+as it degrades. Geist Mono carries the ledger. Both are self-hosted. Arterial
+red is the page accent, withheld until the last ten minutes so its arrival is
+information rather than decoration, and otherwise spent only on whoever is
+holding the Last Light.
+
+The board carries the one other use of colour: the top three cards are graded by
+heat, warmest at the top, with everyone below them in a single neutral field.
+The chroma is kept low enough that no tier competes with the accent, and the
+colour lands on the rank numeral with only a wash on the card, because anything
+stronger turns a deadpan board into a podium.
+
+Outbound links all go through one component, which is also the only place the
+`sponsored nofollow noopener` rel is written. They carry an arrow
+([Phosphor](https://phosphoricons.com)) because an underline says "link" but
+does not say the link leaves the page, and leaving the page is what these people
+are paying for. In the ledger it doubles as the signal for which entries have a
+link at all.
 
 Above the clock hangs the bulb the site is named after, rendered in three.js.
 Its filament burns down across the whole day on a square-root curve, losing

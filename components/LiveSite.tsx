@@ -16,6 +16,7 @@ import { Checkout } from "./Checkout";
 import { Countdown } from "./Countdown";
 import { Ledger } from "./Ledger";
 import { Standings } from "./Standings";
+import { SiteLink } from "./ui/site-link";
 import { PaperGrain } from "./ui/paper-grain";
 
 /*
@@ -74,9 +75,9 @@ export function LiveSite({ initial }: { initial: SiteState }) {
               <>
                 The last light is held by{" "}
                 {holder.url ? (
-                  <a href={holder.url} rel="sponsored nofollow noopener" target="_blank">
+                  <SiteLink href={holder.url} icon={false}>
                     {holder.name ?? "Anonymous"}
-                  </a>
+                  </SiteLink>
                 ) : (
                   <strong>{holder.name ?? "Anonymous"}</strong>
                 )}{" "}
