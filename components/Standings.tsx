@@ -4,11 +4,11 @@ import { costToClimb, type Standing } from "@/lib/standings";
 /**
  * The board.
  *
- * A single crown is a game for two people. This is the part everybody else is
- * playing: sites ranked by everything they have ever paid, with the exact cost
- * of taking the position above printed on every row. There is nothing to work
- * out and nothing to guess, which is the point. The reason to pay is legible
- * from the row itself.
+ * A single Last Light is a game for two people. This is the part everybody else
+ * is playing: sites ranked by everything they have ever paid, each on its own
+ * card, with the exact cost of taking the position above printed on it. There
+ * is nothing to work out and nothing to guess, which is the point. The reason
+ * to pay is legible from the card itself.
  *
  * Identity is the hostname, because there are no accounts here and the link is
  * what is being bought anyway.
@@ -17,11 +17,14 @@ export function Standings({
   standings,
   heading = "The standings",
   limit,
+  final = false,
 }: {
   standings: Standing[];
   heading?: string;
   /** The live page shows a head of the board; the memorial shows all of it. */
   limit?: number;
+  /** On the dead page nobody can be passed, so the cost to climb is dropped. */
+  final?: boolean;
 }) {
   const shown = limit ? standings.slice(0, limit) : standings;
 
@@ -46,35 +49,47 @@ export function Standings({
             return (
               <li
                 key={site.host}
-                className={`board__row${site.holds_lifeline ? " board__row--light" : ""}`}
+                className={`site${site.rank === 1 ? " site--top" : ""}`}
               >
-                <span className="board__rank mono">{site.rank}</span>
+                {/* Zero-padded so the column holds its width down the board. */}
+                <span className="site__rank mono">{String(site.rank).padStart(2, "0")}</span>
 
-                <span className="board__site">
+                <span className="site__title">
                   <a
-                    className="board__host"
+                    className="site__host"
                     href={site.url}
                     rel="sponsored nofollow noopener"
                     target="_blank"
                   >
                     {site.host}
                   </a>
-                  <span className="board__meta">
-                    {site.name ? `${site.name}, ` : ""}
-                    {site.payments} {site.payments === 1 ? "payment" : "payments"},{" "}
-                    {formatAdded(site.total_seconds)} bought
-                    {site.holds_lifeline ? (
-                      <span className="board__light">holds the last light</span>
-                    ) : null}
+                  {site.holds_lifeline ? (
+                    <span className="site__badge">Holds the last light</span>
+                  ) : null}
+                </span>
+
+                <span className="site__meta">{site.name ?? "Anonymous"}</span>
+
+                {/* What the money did, between the site and the money itself. */}
+                <span className="site__stat mono">
+                  {site.payments} {site.payments === 1 ? "payment" : "payments"}
+                </span>
+                <span className="site__stat site__stat--quiet mono">
+                  {formatAdded(site.total_seconds)} bought
+                </span>
+
+                <span className="site__total mono">{formatUsd(site.total_amount)}</span>
+
+                {final ? (
+                  <span className="site__climb site__climb--top mono">
+                    {site.rank === 1 ? "Held the board" : "Final"}
                   </span>
-                </span>
-
-                <span className="board__total mono">{formatUsd(site.total_amount)}</span>
-
-                {/* The whole incentive, stated as a number you can act on. */}
-                <span className="board__climb mono">
-                  {climb === null ? "top of the board" : `${formatUsd(climb)} to pass`}
-                </span>
+                ) : (
+                  /* The whole incentive, stated as a number you can act on. */
+                  <span className={`site__climb mono${climb === null ? " site__climb--top" : ""}`}>
+                    {climb === null ? "Top of the board" : `${formatUsd(climb)} to pass`}
+                  </span>
+                )}
               </li>
             );
           })}

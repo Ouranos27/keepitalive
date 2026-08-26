@@ -86,7 +86,7 @@ export function Memorial({ state }: { state: SiteState }) {
         </li>
       </ul>
 
-      <Standings standings={state.standings} heading="The final standings" />
+      <Standings standings={state.standings} heading="The final standings" final />
 
       <Ledger
         entries={chronological}

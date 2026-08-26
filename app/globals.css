@@ -20,6 +20,7 @@
   /* Cool paper, not cream. Clinical rather than cosy. */
   --paper: #f3f3f1;
   --paper-sunk: #ececea;
+  --card: #fbfbfa;
   --ink: #121211;
   --ash: #6e6e69;
   --faint: #a3a39d;
@@ -181,6 +182,17 @@ a:hover {
 .page > *:not(.grain) {
   position: relative;
   z-index: 1;
+}
+
+/*
+ * The clock takes the full spread because it is the page. Everything that is
+ * read line by line takes a narrower measure, so a board of five sites does not
+ * sit in a thousand pixels with a desert down the middle.
+ */
+.board,
+.ledger,
+.colophon {
+  --column: 54rem;
 }
 
 /* --- the bulb ------------------------------------------------------------- */
@@ -515,10 +527,13 @@ a:hover {
 /* --- the standings -------------------------------------------------------- */
 
 /*
- * The board is the busiest thing on the page after the clock, so it is given
- * real weight: a display-size rank, the hostname as the headline of each row,
- * and the exact cost of passing the site above printed where it cannot be
- * missed.
+ * Each site is a card rather than a row in a striped table, because the board
+ * is a list of entities and a table reads as a spreadsheet of them.
+ *
+ * The cards are flat: a hairline edge and a slightly lifted surface, no
+ * extrusion. The buttons are the only extruded things on this page, and that
+ * is what makes them the only things that look touchable. Cards borrowing the
+ * same shadow would spend that signal.
  */
 .board {
   display: grid;
@@ -549,83 +564,139 @@ a:hover {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
-.board__row {
+/*
+ * The rank column runs the full height of the card, the site and its detail
+ * stack in the middle, and the two numbers stack on the right. Four cells,
+ * two rows, one shared baseline per row.
+ */
+.site {
   display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) auto auto;
-  gap: 0.15rem 1.25rem;
-  align-items: center;
-  padding: 0.7rem 0.9rem;
-  border-radius: var(--r-row);
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "rank title stat  total"
+    "rank meta  stat2 climb";
+  gap: 0.15rem clamp(1rem, 3vw, 2.25rem);
+  align-items: baseline;
+  padding: 0.8rem 1.1rem;
+  line-height: 1.4;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--card);
 }
 
-.board__row:nth-child(odd) {
-  background: var(--paper-sunk);
-}
-
-/* The site holding the last light is the only row that gets the accent. */
-.board__row--light {
-  background: color-mix(in oklab, var(--blood), var(--paper) 92%);
-}
-
-.board__rank {
-  font-size: 1.05rem;
+.site__rank {
+  grid-area: rank;
+  align-self: center;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
-.board__row:first-child .board__rank {
-  font-size: 1.35rem;
-  color: var(--ink);
-}
-
-.board__site {
-  display: grid;
-  gap: 0.1rem;
+.site__title {
+  grid-area: title;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.65rem;
   min-width: 0;
 }
 
-.board__host {
-  font-size: 1rem;
-  font-weight: 620;
-  letter-spacing: -0.014em;
+.site__host {
+  font-size: 1.05rem;
+  font-weight: 640;
+  letter-spacing: -0.016em;
   color: var(--ink);
   overflow-wrap: anywhere;
 }
 
-.board__meta {
+.site__total {
+  grid-area: total;
+  font-size: 1.05rem;
+  font-weight: 620;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.site__meta {
+  grid-area: meta;
   font-size: 0.75rem;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * What the money bought, sitting between the site and the amount so the card
+ * has three zones rather than two clusters at opposite edges of a wide page.
+ */
+.site__stat {
+  grid-area: stat;
+  font-size: 0.75rem;
+  color: var(--ash);
+  white-space: nowrap;
+  min-width: 11ch;
+}
+
+.site__stat--quiet {
+  grid-area: stat2;
   color: var(--faint);
 }
 
-.board__light {
-  margin-left: 0.5rem;
-  font-weight: 620;
-  color: var(--blood);
-}
-
-.board__total {
-  font-size: 1rem;
-  font-weight: 600;
+/*
+ * The cost to pass is the reason anybody reads this board, so it is set as a
+ * real number in ink rather than a faint aside.
+ */
+.site__climb {
+  grid-area: climb;
+  font-size: 0.8125rem;
+  font-weight: 560;
   color: var(--ink);
   text-align: right;
-  min-width: 5ch;
+  white-space: nowrap;
 }
 
-.board__climb {
-  font-size: 0.75rem;
-  color: var(--ash);
-  text-align: right;
-  min-width: 13ch;
+.site__climb--top,
+.site__climb--done {
+  font-weight: 400;
+  color: var(--faint);
+}
+
+/* First place gets the numeral, not a medal. */
+.site--top {
+  border-color: color-mix(in oklab, var(--ink), var(--rule) 78%);
+}
+
+.site--top .site__rank {
+  font-size: 1.4rem;
+  color: var(--ink);
+}
+
+.site--top .site__host,
+.site--top .site__total {
+  font-size: 1.15rem;
+}
+
+.site__badge {
+  font-size: 0.6875rem;
+  font-weight: 620;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--blood);
+  white-space: nowrap;
 }
 
 .board__empty {
   margin: 0;
+  padding: 1.15rem;
   font-size: 0.875rem;
   color: var(--faint);
+  border: 1px dashed var(--rule);
+  border-radius: var(--r-panel);
 }
 
 /* --- the ledger ----------------------------------------------------------- */
@@ -931,14 +1002,26 @@ a:hover {
     gap: 0.75rem;
   }
 
-  .board__row {
-    grid-template-columns: 2rem minmax(0, 1fr) auto;
+  .site {
+    grid-template-columns: 1.9rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank title title"
+      "rank meta  total"
+      "rank stat  stat2"
+      "rank climb climb";
+    gap: 0.25rem 0.9rem;
   }
 
-  .board__climb {
-    grid-column: 2 / -1;
+  .site__climb {
     text-align: left;
+  }
+
+  .site__stat {
     min-width: 0;
+  }
+
+  .site__stat--quiet {
+    text-align: right;
   }
 
   .ledger__row {
