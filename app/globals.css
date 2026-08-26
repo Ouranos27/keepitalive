@@ -1,0 +1,760 @@
+/*
+ * keepitalive.lol
+ *
+ * The page is paper and it is calm. Every bit of dread is spent on one
+ * element, the clock, because a page where everything is shouting reads as an
+ * arcade and a page where one thing is wrong reads as a problem.
+ *
+ * So: cool off-white ground, near-black ink, generous space, no ornament. The
+ * only material effect in the building is on the controls, where a soft
+ * extrusion earns its place by making the buttons feel pressable. Everything
+ * else is type and spacing.
+ *
+ * The clock escalates through five states hung off <main data-state>, and it
+ * is the only selector group below that changes when the state does.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Cool paper, not cream. Clinical rather than cosy. */
+  --paper: #f3f3f1;
+  --paper-sunk: #ececea;
+  --ink: #121211;
+  --ash: #6e6e69;
+  --faint: #a3a39d;
+  --rule: #dcdcd8;
+
+  /*
+   * One accent, locked to the page: arterial. It is spent entirely on the
+   * clock, and only in the last ten minutes, so its arrival is information.
+   */
+  --blood: oklch(0.5 0.19 26);
+  --blood-soft: oklch(0.5 0.19 26 / 0.28);
+
+  /* The clock's dread dials. Every one of them is zero until it is not. */
+  --split: 0em; /* how far the misregistered copies drift apart */
+  --ghost-warm: transparent;
+  --ghost-cool: transparent;
+  --bleed: 0em; /* how far the ink bleeds into the paper */
+  --clock-weight: 730;
+  --clock-width: 108%;
+  --clock-color: var(--ink);
+  /*
+   * Cell widths are measured, not guessed. Archivo's width axis changes the
+   * advance of a digit (0.657em at 108%, 0.815em at 125%), so every state that
+   * widens the type widens its cells to match or the glyphs collide.
+   */
+  --cell: 0.67em;
+  --colon: 0.31em;
+
+  /*
+   * One radius scale, four steps, applied by role and nowhere improvised:
+   * panels 1.25rem, controls 1rem, inputs 0.625rem, ledger rows 0.5rem.
+   */
+  --r-panel: 1.25rem;
+  --r-ctl: 1rem;
+  --r-input: 0.625rem;
+  --r-row: 0.5rem;
+
+  --gutter: clamp(1.25rem, 5vw, 4rem);
+  --column: 68rem;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--paper);
+}
+
+body {
+  min-height: 100svh;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--font-display), "Archivo", system-ui, sans-serif;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+.mono {
+  font-family: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: var(--faint);
+  transition: text-decoration-color 0.2s var(--ease);
+}
+
+a:hover {
+  text-decoration-color: var(--ink);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- shell ---------------------------------------------------------------- */
+
+.page {
+  min-height: 100svh;
+  padding: clamp(1rem, 2.5vh, 1.75rem) var(--gutter) var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2.5rem, 7vh, 5rem);
+}
+
+.page > * {
+  width: 100%;
+  max-width: var(--column);
+  margin-inline: auto;
+}
+
+.masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  font-size: 0.8125rem;
+  color: var(--ash);
+}
+
+.masthead__domain {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.012em;
+}
+
+.masthead__status {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* --- the first screen ----------------------------------------------------- */
+
+/*
+ * The clock, two lines of copy and the two buttons all fit above the fold, so
+ * nobody has to scroll to find out what the page wants from them.
+ */
+.hero {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.25rem, 3.5vh, 2.25rem);
+  text-align: center;
+}
+
+.hero__copy {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 44ch;
+}
+
+.hero__line {
+  margin: 0;
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+  color: var(--ash);
+  text-wrap: balance;
+}
+
+.hero__line strong {
+  color: var(--ink);
+  font-weight: 620;
+}
+
+.hero__holder {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--faint);
+}
+
+.hero__holder a,
+.hero__holder strong {
+  color: var(--ink);
+  font-weight: 560;
+}
+
+/* --- the clock ------------------------------------------------------------ */
+
+.time-wrap {
+  width: 100%;
+}
+
+.time {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(3.25rem, 16vw, 12rem);
+  font-weight: var(--clock-weight);
+  font-stretch: var(--clock-width);
+  letter-spacing: -0.045em;
+  line-height: 0.85;
+  color: var(--clock-color);
+  font-variant-numeric: tabular-nums;
+  transition:
+    font-weight 0.8s linear,
+    font-stretch 0.8s linear,
+    color 0.8s linear;
+}
+
+/*
+ * Fixed cells. A clock that re-flows when a 1 replaces an 8 reads as a bug,
+ * and the scramble would make it jump every frame.
+ */
+.time__cell {
+  width: var(--cell);
+  text-align: center;
+}
+
+.time__colon {
+  width: var(--colon);
+  text-align: center;
+}
+
+/*
+ * The dread, in one declaration. Two offset copies of the digits sit behind
+ * the ink like a press drifting out of register, and a soft bleed spreads
+ * underneath. All three are variables that are zero until the clock is in
+ * trouble.
+ */
+.time__cell,
+.time__colon {
+  text-shadow:
+    calc(var(--split) * -1) 0 0 var(--ghost-warm),
+    var(--split) 0 0 var(--ghost-cool),
+    0 0 var(--bleed) var(--blood-soft);
+  transition:
+    text-shadow 0.8s linear,
+    color 0.8s linear;
+}
+
+/* --- controls ------------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+/*
+ * The one material effect on the page. Buttons are softly extruded off the
+ * paper and press in on :active, so the only thing that looks touchable is
+ * the thing you are meant to touch.
+ */
+.button {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: #fbfbfa;
+  border-radius: var(--r-ctl);
+  padding: 0.85rem 1.15rem;
+  box-shadow:
+    inset 0 1px 0 0 #ffffff,
+    0 1px 1px 0 rgb(28 26 22 / 0.06),
+    0 6px 14px -6px rgb(28 26 22 / 0.22);
+  transition:
+    transform 0.14s var(--ease),
+    box-shadow 0.14s var(--ease),
+    background 0.2s var(--ease);
+}
+
+.button__label {
+  display: block;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+}
+
+.button__note {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ash);
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 0 #ffffff,
+    0 1px 1px 0 rgb(28 26 22 / 0.06),
+    0 10px 20px -8px rgb(28 26 22 / 0.26);
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 5px 0 rgb(28 26 22 / 0.16),
+    inset 0 -1px 0 0 #ffffff;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  color: var(--faint);
+  background: var(--paper-sunk);
+  box-shadow: inset 0 2px 5px 0 rgb(28 26 22 / 0.1);
+}
+
+.button--primary {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.14),
+    0 1px 1px 0 rgb(28 26 22 / 0.14),
+    0 8px 18px -7px rgb(28 26 22 / 0.45);
+}
+
+.button--primary .button__note {
+  color: rgb(243 243 241 / 0.72);
+}
+
+.button--primary:hover:not(:disabled) {
+  background: #22221f;
+}
+
+.button--primary:disabled {
+  background: var(--paper-sunk);
+  color: var(--faint);
+}
+
+.button--primary:disabled .button__note {
+  color: var(--faint);
+}
+
+/* --- checkout ------------------------------------------------------------- */
+
+.checkout {
+  display: grid;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 30rem;
+  text-align: left;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  background: #fbfbfa;
+  border-radius: var(--r-panel);
+  box-shadow:
+    inset 0 1px 0 0 #ffffff,
+    0 1px 1px 0 rgb(28 26 22 / 0.06),
+    0 14px 30px -14px rgb(28 26 22 / 0.28);
+}
+
+.checkout__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 660;
+  letter-spacing: -0.018em;
+}
+
+.checkout__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ash);
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.field__label {
+  font-size: 0.75rem;
+  color: var(--ash);
+}
+
+.field input {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-input);
+  padding: 0.6rem 0.75rem;
+}
+
+.field input::placeholder {
+  color: var(--faint);
+}
+
+.field input:focus {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.checkout__error {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 560;
+  color: var(--blood);
+}
+
+.checkout__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+/* --- the ledger ----------------------------------------------------------- */
+
+.ledger {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.ledger__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.ledger__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 620;
+  letter-spacing: -0.016em;
+}
+
+.ledger__count {
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+
+.ledger__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * A register, banded rather than ruled. A hairline under every row is the lazy
+ * default and it turns a list of people into a spreadsheet.
+ */
+.ledger__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.2rem 1.5rem;
+  align-items: baseline;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--r-row);
+  font-size: 0.875rem;
+  color: var(--ash);
+}
+
+.ledger__row:nth-child(odd) {
+  background: var(--paper-sunk);
+}
+
+.ledger__who {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 540;
+}
+
+.ledger__held {
+  margin-left: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 620;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.ledger__amount {
+  font-size: 0.875rem;
+  color: var(--ink);
+  text-align: right;
+  min-width: 5ch;
+}
+
+.ledger__added {
+  font-size: 0.8125rem;
+  color: var(--faint);
+  text-align: right;
+  min-width: 15ch;
+}
+
+.ledger__empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--faint);
+}
+
+.colophon {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.75rem;
+  color: var(--faint);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.5rem;
+}
+
+/* --- the escalation ------------------------------------------------------- */
+
+/*
+ * Under an hour. The type thickens and the press starts to drift, in grey.
+ * No colour yet: the accent is still being saved.
+ */
+[data-state="urgent"] {
+  --clock-weight: 800;
+  --clock-width: 115%;
+  --cell: 0.735em;
+  --colon: 0.335em;
+  --split: 0.012em;
+  --ghost-warm: rgb(18 18 17 / 0.16);
+  --ghost-cool: rgb(18 18 17 / 0.1);
+}
+
+[data-state="urgent"] .masthead__status {
+  color: var(--ash);
+}
+
+/*
+ * Under ten minutes. The drift widens, one of the two copies goes arterial,
+ * and the ink starts to bleed into the paper.
+ */
+[data-state="critical"] {
+  --clock-weight: 860;
+  --clock-width: 120%;
+  --cell: 0.79em;
+  --colon: 0.355em;
+  --split: 0.022em;
+  --ghost-warm: var(--blood);
+  --ghost-cool: rgb(18 18 17 / 0.2);
+  --bleed: 0.24em;
+}
+
+[data-state="critical"] .masthead__status,
+[data-state="terminal"] .masthead__status {
+  color: var(--blood);
+}
+
+[data-state="critical"] .ledger,
+[data-state="critical"] .colophon {
+  opacity: 0.45;
+}
+
+/*
+ * Under a minute. Everything that is not the number is gone, the clock itself
+ * goes arterial, and the whole thing develops a tremor.
+ */
+[data-state="terminal"] {
+  --clock-weight: 900;
+  --clock-width: 125%;
+  --cell: 0.835em;
+  --colon: 0.375em;
+  --clock-color: var(--blood);
+  /*
+   * The drift closes back up here, deliberately. At this size a wide offset
+   * stops reading as a press out of register and starts reading as a 3D drop
+   * shadow, which is a much cheaper effect. What carries the last minute is
+   * the colour, the weight and the empty page around it, so the ghosts pull
+   * back to a fringe and the bleed does the rest.
+   */
+  --split: 0.011em;
+  --ghost-warm: oklch(0.34 0.13 26 / 0.65);
+  --ghost-cool: oklch(0.34 0.13 26 / 0.4);
+  --bleed: 0.22em;
+}
+
+[data-state="terminal"] .hero__copy,
+[data-state="terminal"] .ledger,
+[data-state="terminal"] .colophon {
+  display: none;
+}
+
+[data-state="terminal"] .time {
+  /* 5.76em of glyphs at this width, so the ceiling is what actually fits. */
+  font-size: clamp(3.25rem, 15vw, 13rem);
+  animation: tremor 260ms steps(2, end) infinite;
+}
+
+/* Half a pixel of shake. Any more and it stops being dread and becomes a toy. */
+@keyframes tremor {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0.5px, -0.5px, 0);
+  }
+  100% {
+    transform: translate3d(-0.5px, 0.5px, 0);
+  }
+}
+
+/* --- the dead state ------------------------------------------------------- */
+
+/*
+ * Everything resets. The press comes back into register, the colour drains,
+ * and the number sits flat and grey on the paper. This page never changes
+ * again, and it should not look like it is about to.
+ */
+[data-state="dead"] {
+  --clock-weight: 760;
+  --clock-width: 112%;
+  --cell: 0.695em;
+  --colon: 0.315em;
+  --clock-color: #c9c9c4;
+  --split: 0em;
+  --bleed: 0em;
+  --blood-soft: transparent;
+}
+
+.verdict {
+  margin: 0;
+  font-size: clamp(1.75rem, 5.5vw, 3.25rem);
+  font-weight: 780;
+  font-stretch: 108%;
+  letter-spacing: -0.04em;
+  line-height: 1.03;
+  text-wrap: balance;
+}
+
+.verdict__when {
+  margin: 0.55rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+
+.holder {
+  display: grid;
+  gap: 0.5rem;
+  padding: clamp(1.75rem, 5vh, 3rem) 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  text-align: center;
+}
+
+.holder__eyebrow {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.holder__name {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 4rem);
+  font-weight: 800;
+  font-stretch: 114%;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+}
+
+.holder__meta {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ash);
+}
+
+.stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(1rem, 3vw, 2rem);
+}
+
+.stats li {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.stats__value {
+  font-size: clamp(1.25rem, 3vw, 1.9rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats__label {
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+/* --- responsive ----------------------------------------------------------- */
+
+@media (max-width: 40rem) {
+  .stats {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .ledger__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ledger__added {
+    grid-column: 1 / -1;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions .button {
+    flex: 1 1 100%;
+  }
+}
+
+/*
+ * The tremor and the scramble both exist to say the clock is failing. Under
+ * reduced motion that job is carried by weight, drift and colour, which are
+ * all static and all still work.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-state="terminal"] .time {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
