@@ -259,62 +259,117 @@ test("a self-hosted analytics endpoint is read and boots clean", () => {
   assert.deepEqual(inspectConfig(env), []);
 });
 
-test("no endpoint means the hosted cloud, which is not a problem", () => {
-  assert.equal(readConfig(LIVE).analyticsApiUrl, null);
-  assert.ok(!warnKeys(LIVE).includes("NEXT_PUBLIC_OPENPANEL_API_URL"));
+test("a self-hosted SDK script is read and boots clean", () => {
+  // The script comes off the dashboard origin, not the API one, so the two are
+  // set independently and neither implies the other.
+  const env = { ...LIVE, NEXT_PUBLIC_OPENPANEL_SCRIPT_URL: "https://openpanel.example.com/op1.js" };
+  assert.equal(readConfig(env).analyticsScriptUrl, "https://openpanel.example.com/op1.js");
+  assert.equal(readConfig(env).analyticsApiUrl, null, "a script host must not imply an endpoint");
+  assert.deepEqual(inspectConfig(env), []);
 });
 
-test("an endpoint that is not an absolute http(s) URL is dropped, not passed on", () => {
-  // Handing it to the SDK would post every event at an unusable address and
-  // lose the lot. Falling back to the cloud at least keeps them.
-  for (const bad of ["api-openpanel.example.com", "ftp://api-openpanel.example.com", "/api"]) {
-    const env = { ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: bad };
-    assert.equal(readConfig(env).analyticsApiUrl, null, `${bad} should be dropped`);
-    assert.ok(warnKeys(env).includes("NEXT_PUBLIC_OPENPANEL_API_URL"), `${bad} should warn`);
+test("neither URL set means the hosted defaults, which is not a problem", () => {
+  assert.equal(readConfig(LIVE).analyticsApiUrl, null);
+  assert.equal(readConfig(LIVE).analyticsScriptUrl, null);
+  assert.deepEqual(inspectConfig(LIVE), []);
+});
+
+test("a URL that is not absolute http(s) is dropped, not passed on", () => {
+  // Handing either to the SDK loses everything: events posted at an unusable
+  // address, or a script tag that fetches nothing. The hosted default at least
+  // keeps the site measurable.
+  for (const key of ["NEXT_PUBLIC_OPENPANEL_API_URL", "NEXT_PUBLIC_OPENPANEL_SCRIPT_URL"]) {
+    for (const bad of ["openpanel.example.com/op1.js", "ftp://openpanel.example.com", "/op1.js"]) {
+      const env = { ...LIVE, [key]: bad };
+      const config = readConfig(env);
+      const resolved =
+        key === "NEXT_PUBLIC_OPENPANEL_API_URL" ? config.analyticsApiUrl : config.analyticsScriptUrl;
+      assert.equal(resolved, null, `${key}=${bad} should be dropped`);
+      assert.ok(warnKeys(env).includes(key), `${key}=${bad} should warn`);
+    }
   }
 });
 
-test("an endpoint is trimmed and a whitespace-only one counts as unset", () => {
+test("a script URL pointed at a bare origin is called out", () => {
+  // The easy mistake, and a silent one: the tag loads the dashboard's HTML,
+  // the browser refuses to run it, and window.op is never defined.
+  const env = { ...LIVE, NEXT_PUBLIC_OPENPANEL_SCRIPT_URL: "https://openpanel.example.com" };
+  assert.ok(warnKeys(env).includes("NEXT_PUBLIC_OPENPANEL_SCRIPT_URL"));
+  // It is still passed through: only the shape is suspicious, and a proxy may
+  // legitimately serve the SDK from a path that does not end in .js.
+  assert.equal(readConfig(env).analyticsScriptUrl, "https://openpanel.example.com");
+
+  const cacheBusted = {
+    ...LIVE,
+    NEXT_PUBLIC_OPENPANEL_SCRIPT_URL: "https://openpanel.example.com/op1.js?v=2",
+  };
+  assert.deepEqual(inspectConfig(cacheBusted), [], "a query string is not a bare origin");
+});
+
+test("URLs are trimmed and a whitespace-only one counts as unset", () => {
   assert.equal(
     readConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: " https://api.example.com\n" })
       .analyticsApiUrl,
     "https://api.example.com",
   );
-  const blank = { ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: "   " };
+  assert.equal(
+    readConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_SCRIPT_URL: " https://x.example.com/op1.js " })
+      .analyticsScriptUrl,
+    "https://x.example.com/op1.js",
+  );
+  const blank = {
+    ...LIVE,
+    NEXT_PUBLIC_OPENPANEL_API_URL: "   ",
+    NEXT_PUBLIC_OPENPANEL_SCRIPT_URL: "  ",
+  };
   assert.equal(readConfig(blank).analyticsApiUrl, null);
-  assert.ok(!warnKeys(blank).includes("NEXT_PUBLIC_OPENPANEL_API_URL"));
+  assert.equal(readConfig(blank).analyticsScriptUrl, null);
+  assert.deepEqual(inspectConfig(blank), []);
 });
 
-test("a misspelled endpoint variable is named rather than ignored", () => {
+test("a misspelled analytics variable is named rather than ignored", () => {
   // Vercel stores whatever name was typed, so nothing else would ever mention
   // it: the deploy succeeds and the self-hosted instance records nothing.
-  for (const typo of [
-    "NEX_PUBLI_OPENPANEL_API_URL",
-    "NEXT_PUBLIC_OPENPANEL_APIURL",
-    "NEXT_PUBLIC_OPENPANEL_API_URL_",
-  ]) {
-    const warnings = inspectConfig({ ...LIVE, [typo]: "https://api-openpanel.example.com" }).filter(
+  const typos: Array<[string, string]> = [
+    ["NEX_PUBLI_OPENPANEL_API_URL", "NEXT_PUBLIC_OPENPANEL_API_URL"],
+    ["NEXT_PUBLIC_OPENPANEL_APIURL", "NEXT_PUBLIC_OPENPANEL_API_URL"],
+    ["NEXT_PUBLIC_OPENPANEL_API_URL_", "NEXT_PUBLIC_OPENPANEL_API_URL"],
+    ["NEX_PUBLIC_OPENPANEL_SCRIPT_URL", "NEXT_PUBLIC_OPENPANEL_SCRIPT_URL"],
+    ["NEXT_PUBLIC_OPENPANEL_SCRIPTURL", "NEXT_PUBLIC_OPENPANEL_SCRIPT_URL"],
+    ["NEXT_PUBLIC_OPENPANEL_CLIENTID", "NEXT_PUBLIC_OPENPANEL_CLIENT_ID"],
+  ];
+  for (const [typo, meant] of typos) {
+    const named = inspectConfig({ ...LIVE, [typo]: "https://openpanel.example.com/op1.js" }).filter(
       (p) => p.key === typo,
     );
-    assert.equal(warnings.length, 1, `${typo} should be called out exactly once`);
-    assert.match(warnings[0].message, /NEXT_PUBLIC_OPENPANEL_API_URL/);
+    assert.equal(named.length, 1, `${typo} should be called out exactly once`);
+    assert.match(named[0].message, new RegExp(meant), `${typo} should point at ${meant}`);
   }
 
-  // The correct spelling must not accuse itself of being a typo.
+  // A correct spelling must never accuse itself of being a typo.
   assert.deepEqual(
-    inspectConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: "https://api-openpanel.example.com" }),
+    inspectConfig({
+      ...LIVE,
+      NEXT_PUBLIC_OPENPANEL_API_URL: "https://api-openpanel.example.com",
+      NEXT_PUBLIC_OPENPANEL_SCRIPT_URL: "https://openpanel.example.com/op1.js",
+    }),
     [],
   );
+
+  // And an unrelated variable is not swept up by the pattern.
+  assert.deepEqual(inspectConfig({ ...LIVE, NEXT_PUBLIC_SITE_URL: "https://lastlight.lol" }), []);
 });
 
-test("an endpoint without a client id never gets called, and says so", () => {
-  const env = {
-    ...LIVE,
-    NEXT_PUBLIC_OPENPANEL_CLIENT_ID: undefined,
-    NEXT_PUBLIC_OPENPANEL_API_URL: "https://api-openpanel.example.com",
-  };
-  const warnings = warnKeys(env).filter((key) => key === "NEXT_PUBLIC_OPENPANEL_CLIENT_ID");
-  assert.equal(warnings.length, 2, "both the missing id and the orphaned endpoint are named");
+test("self-hosting without a client id never gets called, and says so", () => {
+  for (const key of ["NEXT_PUBLIC_OPENPANEL_API_URL", "NEXT_PUBLIC_OPENPANEL_SCRIPT_URL"]) {
+    const env = {
+      ...LIVE,
+      NEXT_PUBLIC_OPENPANEL_CLIENT_ID: undefined,
+      [key]: "https://openpanel.example.com/op1.js",
+    };
+    const named = warnKeys(env).filter((k) => k === "NEXT_PUBLIC_OPENPANEL_CLIENT_ID");
+    assert.equal(named.length, 2, `${key}: both the missing id and the orphan are named`);
+  }
 });
 
 test("a bare development environment is usable and says so", () => {
@@ -327,10 +382,14 @@ test("the summary line names the state without printing a secret", () => {
   const line = describeConfig(LIVE);
   assert.match(line, /store: upstash/);
   assert.match(line, /payments: polar \(production\)/);
-  assert.match(line, /analytics: openpanel cloud/);
+  assert.match(line, /analytics: events openpanel cloud, sdk openpanel\.dev/);
   assert.match(
-    describeConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: "https://api.example.com" }),
-    /analytics: self-hosted \(https:\/\/api\.example\.com\)/,
+    describeConfig({
+      ...LIVE,
+      NEXT_PUBLIC_OPENPANEL_API_URL: "https://api.example.com",
+      NEXT_PUBLIC_OPENPANEL_SCRIPT_URL: "https://op.example.com/op1.js",
+    }),
+    /analytics: events https:\/\/api\.example\.com, sdk https:\/\/op\.example\.com\/op1\.js/,
   );
   assert.match(
     describeConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_CLIENT_ID: undefined }),

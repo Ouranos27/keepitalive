@@ -94,13 +94,19 @@ and refuses payments), simulated payments left on, a `CLOCK_LAUNCH_AT` in second
 rather than milliseconds, a relative `NEXT_PUBLIC_SITE_URL`, a `POLAR_SERVER`
 typo, missing analytics. `lib/env.test.ts` covers each case.
 
-Analytics can point at a self-hosted OpenPanel instead of the hosted cloud:
-`NEXT_PUBLIC_OPENPANEL_API_URL` is the API origin, and omitting it leaves the
-SDK on openpanel.dev. That one is easy to get wrong quietly, because a bad value
-does not break anything visible: the SDK falls back to the cloud and the
-self-hosted instance simply stays empty. So a value that is not an absolute
-http(s) URL is dropped with a warning rather than handed to the SDK, and a
-variable whose name only nearly matches is named on the boot log.
+Analytics can run entirely on a self-hosted OpenPanel: `NEXT_PUBLIC_OPENPANEL_API_URL`
+is where events are posted and `NEXT_PUBLIC_OPENPANEL_SCRIPT_URL` is where the SDK
+is loaded from. They are two different hosts — an instance answers events on its
+API origin and serves `op1.js` from its dashboard origin — and either can be left
+unset for the hosted default.
+
+Analytics is the one part of this configuration that fails *silently* when it is
+wrong: a bad value breaks nothing visible, because the SDK falls back to its
+hosted defaults and the self-hosted instance simply stays empty. So a value that
+is not an absolute http(s) URL is dropped with a warning rather than handed to
+the SDK, a script URL that looks like a bare origin is warned about (a script tag
+pointed at a dashboard loads HTML and never defines `window.op`), and a variable
+whose name only nearly matches one of these is named on the boot log.
 
 Useful for looking at a state you would otherwise have to wait for:
 `CLOCK_LAUNCH_AT` is a unix-ms instant the clock started, so setting it into the

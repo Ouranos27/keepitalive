@@ -31,6 +31,14 @@ export type Config = {
    * instance instead.
    */
   analyticsApiUrl: string | null;
+  /**
+   * Where the SDK itself is loaded from. Separate from the endpoint, and on a
+   * separate host: a self-hosted OpenPanel serves op1.js from its dashboard
+   * origin, not from its API origin. Null leaves the script on openpanel.dev
+   * even when the events are self-hosted, which works but is a third party on
+   * the page.
+   */
+  analyticsScriptUrl: string | null;
   /** Unix ms the clock started, or null to start it at first read. */
   launchAt: number | null;
   allowSimulatedPayments: boolean;
@@ -49,8 +57,27 @@ const DEFAULT_SITE_URL = "https://lastlight.lol";
 /** Anything before this as a millisecond timestamp is a seconds value by mistake. */
 const MS_FLOOR = 1_000_000_000_000;
 
-/** The one spelling the SDK is wired to. Typos here fail silently, so it is named once. */
-const ANALYTICS_API_URL = "NEXT_PUBLIC_OPENPANEL_API_URL";
+/**
+ * The exact spellings the SDK is wired to.
+ *
+ * Analytics is the one part of this configuration that fails *silently* when
+ * it is wrong: a typo leaves the value undefined, the SDK falls back to its
+ * hosted defaults, the build is green, and the self-hosted instance simply
+ * stays empty. Nothing else would ever mention it, so the names are held here
+ * and near misses are named at boot.
+ */
+const ANALYTICS = {
+  clientId: "NEXT_PUBLIC_OPENPANEL_CLIENT_ID",
+  apiUrl: "NEXT_PUBLIC_OPENPANEL_API_URL",
+  scriptUrl: "NEXT_PUBLIC_OPENPANEL_SCRIPT_URL",
+} as const;
+
+/** What each analytics variable is *nearly* called. */
+const ANALYTICS_NEAR_MISSES: Array<[RegExp, string]> = [
+  [/^NEX.*OPENPANEL.*CLIENT.*ID/i, ANALYTICS.clientId],
+  [/^NEX.*OPENPANEL.*API.*URL/i, ANALYTICS.apiUrl],
+  [/^NEX.*OPENPANEL.*SCRIPT.*URL/i, ANALYTICS.scriptUrl],
+];
 
 function absoluteHttp(value: string): boolean {
   try {
@@ -98,10 +125,12 @@ export function readConfig(env: Env): Config {
 
   const launchAt = Number(env.CLOCK_LAUNCH_AT);
 
-  // A malformed endpoint is dropped rather than handed to the SDK: the SDK
-  // would post events at it and lose every one. Falling back to the cloud
-  // keeps the site measurable, and inspectConfig says so out loud.
-  const analyticsApiUrl = trimmed(env[ANALYTICS_API_URL]);
+  // A malformed URL is dropped rather than handed to the SDK, which would post
+  // every event at an unusable address, or load a script tag that never
+  // defines window.op. Falling back to the hosted defaults keeps the site
+  // measurable, and inspectConfig says so out loud.
+  const analyticsApiUrl = trimmed(env[ANALYTICS.apiUrl]);
+  const analyticsScriptUrl = trimmed(env[ANALYTICS.scriptUrl]);
 
   return {
     redis: redis ? { url: redis.url, token: redis.token } : null,
@@ -117,8 +146,10 @@ export function readConfig(env: Env): Config {
           }
         : null,
     siteUrl: trimmed(env.NEXT_PUBLIC_SITE_URL) ?? DEFAULT_SITE_URL,
-    analyticsClientId: trimmed(env.NEXT_PUBLIC_OPENPANEL_CLIENT_ID),
+    analyticsClientId: trimmed(env[ANALYTICS.clientId]),
     analyticsApiUrl: analyticsApiUrl && absoluteHttp(analyticsApiUrl) ? analyticsApiUrl : null,
+    analyticsScriptUrl:
+      analyticsScriptUrl && absoluteHttp(analyticsScriptUrl) ? analyticsScriptUrl : null,
     launchAt: Number.isFinite(launchAt) && launchAt > 0 ? launchAt : null,
     allowSimulatedPayments: env.ALLOW_SIMULATED_PAYMENTS === "1",
     production: env.NODE_ENV === "production",
@@ -236,44 +267,74 @@ export function inspectConfig(env: Env): Problem[] {
   if (config.production && !config.analyticsClientId) {
     problems.push({
       level: "warn",
-      key: "NEXT_PUBLIC_OPENPANEL_CLIENT_ID",
+      key: ANALYTICS.clientId,
       message: "No analytics client id. The site runs; nothing is measured.",
     });
   }
 
-  const rawAnalyticsApiUrl = trimmed(env[ANALYTICS_API_URL]);
-  if (rawAnalyticsApiUrl !== null && config.analyticsApiUrl === null) {
+  // Both URLs are dropped when malformed rather than passed on, so what is
+  // reported here is what was thrown away and what happens instead.
+  const dropped: Array<[string, string | null, string]> = [
+    [ANALYTICS.apiUrl, config.analyticsApiUrl, "events go to the OpenPanel cloud rather than nowhere"],
+    [
+      ANALYTICS.scriptUrl,
+      config.analyticsScriptUrl,
+      "the SDK is loaded from openpanel.dev rather than from a tag that fetches nothing",
+    ],
+  ];
+  for (const [key, resolved, consequence] of dropped) {
+    const raw = trimmed(env[key]);
+    if (raw !== null && resolved === null) {
+      problems.push({
+        level: "warn",
+        key,
+        message: `${key} is not an absolute http(s) URL (${raw}). Ignoring it, so ${consequence}.`,
+      });
+    }
+  }
+
+  // A self-hosted OpenPanel serves the SDK from its dashboard origin, so the
+  // value wanted here is .../op1.js. An origin on its own is the easy mistake
+  // and the silent one: the tag loads the dashboard's HTML, the browser
+  // refuses to run it, and window.op is never defined.
+  if (config.analyticsScriptUrl && !/\.js($|\?)/i.test(config.analyticsScriptUrl)) {
     problems.push({
       level: "warn",
-      key: ANALYTICS_API_URL,
-      message: `${ANALYTICS_API_URL} is not an absolute http(s) URL (${rawAnalyticsApiUrl}). Ignoring it, so events go to the OpenPanel cloud rather than nowhere.`,
+      key: ANALYTICS.scriptUrl,
+      message: `${ANALYTICS.scriptUrl} is ${config.analyticsScriptUrl}, which does not look like a script. A self-hosted instance serves the SDK at <dashboard-origin>/op1.js; an origin on its own loads HTML into a script tag and analytics silently never starts.`,
     });
   }
 
-  if (config.analyticsApiUrl !== null && !config.analyticsClientId) {
+  if (!config.analyticsClientId && (config.analyticsApiUrl || config.analyticsScriptUrl)) {
     problems.push({
       level: "warn",
-      key: "NEXT_PUBLIC_OPENPANEL_CLIENT_ID",
-      message:
-        "A self-hosted analytics endpoint is set without NEXT_PUBLIC_OPENPANEL_CLIENT_ID. Without a client id the SDK is never mounted, so the endpoint is never called.",
+      key: ANALYTICS.clientId,
+      message: `Self-hosted analytics is configured without ${ANALYTICS.clientId}. Without a client id the SDK is never mounted, so neither the endpoint nor the script is ever called.`,
     });
   }
 
-  // Vercel keeps whatever name you typed, so a slip here is invisible: the
-  // build is green, the SDK falls back to the cloud, and the self-hosted
-  // instance stays empty. Name any near miss rather than let it pass.
+  // Vercel keeps whatever name was typed, so a slip is invisible from every
+  // other angle. Name any near miss rather than let it pass.
+  const canonical = new Set<string>(Object.values(ANALYTICS));
   for (const key of Object.keys(env)) {
-    if (key === ANALYTICS_API_URL) continue;
-    if (!/^NEX.*OPENPANEL.*API.*URL/i.test(key)) continue;
-    if (trimmed(env[key]) === null) continue;
+    if (canonical.has(key) || trimmed(env[key]) === null) continue;
+    const meant = ANALYTICS_NEAR_MISSES.find(([pattern]) => pattern.test(key))?.[1];
+    if (!meant) continue;
     problems.push({
       level: "warn",
       key,
-      message: `${key} is set, but the variable the OpenPanel SDK reads here is ${ANALYTICS_API_URL}. Events are going to the OpenPanel cloud, not the self-hosted instance. Rename it.`,
+      message: `${key} is set, but the variable read here is ${meant}. It is being ignored, so analytics is running on its hosted defaults. Rename it.`,
     });
   }
 
   return problems;
+}
+
+function describeAnalytics(config: Config): string {
+  if (config.analyticsClientId === null) return "off";
+  const events = config.analyticsApiUrl ?? "openpanel cloud";
+  const script = config.analyticsScriptUrl ?? "openpanel.dev";
+  return `events ${events}, sdk ${script}`;
 }
 
 /** One line per variable, with nothing secret in it. */
@@ -285,13 +346,7 @@ export function describeConfig(env: Env): string {
     `payments: ${config.polar ? `polar (${config.polar.server})` : "none"}`,
     `simulated payments: ${config.allowSimulatedPayments ? "ON" : "off"}`,
     `clock start: ${config.launchAt ? new Date(config.launchAt).toISOString() : "first read"}`,
-    `analytics: ${
-      config.analyticsClientId === null
-        ? "off"
-        : config.analyticsApiUrl === null
-          ? "openpanel cloud"
-          : `self-hosted (${config.analyticsApiUrl})`
-    }`,
+    `analytics: ${describeAnalytics(config)}`,
     `site url: ${config.siteUrl}`,
   ].join(", ");
 }

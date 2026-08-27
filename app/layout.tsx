@@ -65,15 +65,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           preview deploy send nothing. There is one page here, so screen views
           are the whole of what there is to measure.
 
-          apiUrl points the SDK at a self-hosted OpenPanel. It is spread in
-          rather than passed as undefined because the component serialises its
-          options into an inline script, and an absent key is what the SDK's
-          own fallback to the hosted cloud is written against.
+          apiUrl points the SDK at a self-hosted OpenPanel and scriptUrl loads
+          the SDK itself from one. They are two hosts, not one: a self-hosted
+          instance answers events on its API origin and serves op1.js from its
+          dashboard origin. Either can be left unset independently.
+
+          Both are spread in rather than passed as undefined because the
+          component serialises its options into an inline script, and an absent
+          key is what the SDK's own fallbacks are written against.
         */}
         {config.analyticsClientId ? (
           <OpenPanelComponent
             clientId={config.analyticsClientId}
             {...(config.analyticsApiUrl ? { apiUrl: config.analyticsApiUrl } : {})}
+            {...(config.analyticsScriptUrl ? { scriptUrl: config.analyticsScriptUrl } : {})}
             trackScreenViews
           />
         ) : null}
