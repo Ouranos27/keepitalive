@@ -1,0 +1,1250 @@
+/*
+ * lastlight.lol
+ *
+ * The page is paper and it is calm. Every bit of dread is spent on one
+ * element, the clock, because a page where everything is shouting reads as an
+ * arcade and a page where one thing is wrong reads as a problem.
+ *
+ * So: cool off-white ground, near-black ink, generous space, no ornament. The
+ * only material effect in the building is on the controls, where a soft
+ * extrusion earns its place by making the buttons feel pressable. Everything
+ * else is type and spacing.
+ *
+ * The clock escalates through five states hung off <main data-state>, and it
+ * is the only selector group below that changes when the state does.
+ */
+
+:root {
+  color-scheme: light;
+
+  /*
+   * How far the light reaches, as a multiple of the viewport's larger side,
+   * and where it is centred. Written by LiveSite from the clock; see
+   * lib/theme.ts for why the light shrinks instead of the page fading.
+   */
+  --pool: 1.75;
+  --pool-x: 50%;
+  --pool-y: 22%;
+  /* How soft the edge of the light is. A real pool of lamplight has an edge. */
+  --pool-edge: 0.32;
+
+  /*
+   * The board's tiers, graded by heat rather than by medal: the closer to the
+   * top, the warmer and brighter. Chroma is kept low enough that none of them
+   * competes with the arterial accent, which stays reserved for the clock and
+   * for whoever is holding the Last Light.
+   */
+  --tier-1: oklch(0.68 0.115 82);
+  --tier-2: oklch(0.62 0.04 238);
+  --tier-3: oklch(0.53 0.055 70);
+
+  /* The clock's dread dials. Every one of them is zero until it is not. */
+  --split: 0em; /* how far the misregistered copies drift apart */
+  --ghost-warm: transparent;
+  --ghost-cool: transparent;
+  --bleed: 0em; /* how far the ink bleeds into the paper */
+  --clock-weight: 730;
+  --clock-width: 108%;
+  --clock-color: var(--ink);
+  /*
+   * Cell widths are measured, not guessed. Archivo's width axis changes the
+   * advance of a digit (0.657em at 108%, 0.815em at 125%), so every state that
+   * widens the type widens its cells to match or the glyphs collide.
+   */
+  --cell: 0.67em;
+  --colon: 0.31em;
+
+  /*
+   * One radius scale, four steps, applied by role and nowhere improvised:
+   * panels 1.25rem, controls 1rem, inputs 0.625rem, ledger rows 0.5rem.
+   */
+  --r-panel: 1.25rem;
+  --r-ctl: 1rem;
+  --r-input: 0.625rem;
+  --r-row: 0.5rem;
+
+  /* 1 while the filament is steady, dipping as it gutters. Written by the bulb. */
+  --flicker: 1;
+
+  /* The extrusion on the controls, which is the only material on the page. */
+  --lift: #ffffff;
+  --cast: rgb(28 26 22 / 0.22);
+
+  --gutter: clamp(1.25rem, 5vw, 4rem);
+  --column: 68rem;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+ * The two rooms.
+ *
+ * Exactly two palettes and nothing between them. Anything inside the pool of
+ * light uses the lit one; anything outside uses the dark one. There is no
+ * interpolation, which is what keeps every part of the page out of the mid
+ * grey where neither dark nor light text is readable.
+ *
+ * lib/theme.ts holds the same values and a test fails if the two disagree.
+ */
+[data-room="lit"] {
+  --paper: rgb(243 243 241);
+  --card: rgb(251 251 250);
+  --paper-sunk: rgb(236 236 234);
+  --ink: rgb(18 18 17);
+  --ash: rgb(92 92 87);
+  --faint: rgb(103 103 97);
+  --rule: rgb(220 220 216);
+  --blood: rgb(178 34 26);
+  --lift: #ffffff;
+  --cast: rgb(28 26 22 / 0.22);
+  --grain: 0.055;
+}
+
+[data-room="dark"] {
+  --paper: rgb(13 11 10);
+  --card: rgb(26 23 21);
+  --paper-sunk: rgb(22 19 18);
+  --ink: rgb(244 238 232);
+  --ash: rgb(198 187 176);
+  --faint: rgb(163 152 141);
+  --rule: rgb(58 52 47);
+  --blood: rgb(255 138 112);
+  --lift: rgb(255 245 235 / 0.08);
+  --cast: rgb(0 0 0 / 0.6);
+  --grain: 0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* The room beyond the page. Overscroll should not flash paper. */
+  background: rgb(13 11 10);
+}
+
+body {
+  min-height: 100svh;
+  color: var(--ink);
+  background: transparent;
+  font-family: var(--font-display), "Archivo", system-ui, sans-serif;
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+.mono {
+  font-family: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: var(--faint);
+  transition: text-decoration-color 0.2s var(--ease);
+}
+
+a:hover {
+  text-decoration-color: var(--ink);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- shell ---------------------------------------------------------------- */
+
+.page {
+  /*
+   * The palette arrives here as inline custom properties, so anything derived
+   * from it has to be declared here too. A `--x: var(--y)` written on :root is
+   * substituted using :root's value of --y, which would freeze it to the lit
+   * fallback and leave the dark room reading dark text on a dark ground.
+   *
+   * Text colour is set here rather than on body for the same reason.
+   */
+  color: var(--ink);
+  --clock-color: var(--ink);
+  --blood-soft: color-mix(in oklab, var(--blood), transparent 72%);
+
+  /*
+   * The pool of light, centred on the bulb. Paper inside it, near-black
+   * outside, with a soft but real edge between. The radius is what the clock
+   * drives, so the light closes in rather than the page fading.
+   */
+  background:
+    radial-gradient(
+      circle at var(--pool-x) var(--pool-y),
+      rgb(243 243 241) 0%,
+      rgb(243 243 241) calc(var(--pool) * (1 - var(--pool-edge)) * 100vmax),
+      rgb(13 11 10) calc(var(--pool) * (1 + var(--pool-edge)) * 100vmax),
+      rgb(13 11 10) 100%
+    );
+  min-height: 100svh;
+  transition: color 1.2s linear;
+  padding: clamp(1rem, 2.5vh, 1.75rem) var(--gutter) var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2.5rem, 7vh, 5rem);
+}
+
+/*
+ * The reading column. The two full-bleed layers are excluded: they are fixed
+ * to the viewport, and constraining them to the column made the grain darken
+ * only the middle of the page.
+ */
+.page > *:not(.grain):not(.roomlight) {
+  width: 100%;
+  max-width: var(--column);
+  margin-inline: auto;
+}
+
+.masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  font-size: 0.8125rem;
+  color: var(--ash);
+}
+
+.masthead__domain {
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.012em;
+}
+
+.masthead__status {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/*
+ * Each section carries its own ground.
+ *
+ * The pool has a soft edge, and text sitting on that edge would be dark ink on
+ * a half-dark ground, which is the unreadable middle the whole design exists
+ * to avoid. Painting the section keeps every block of text on one room's
+ * ground or the other's, and the soft edge is then only ever visible in the
+ * gaps between sections, which is where the edge of a real pool of lamplight
+ * would fall.
+ *
+ * The spread shadow is what stops them reading as boxes: it bleeds each
+ * section's ground outward into the gradient so the light has no hard corners.
+ */
+[data-zone] {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 0 5rem 0 var(--paper);
+  transition:
+    background-color 0.9s linear,
+    color 0.9s linear,
+    box-shadow 0.9s linear;
+}
+
+/* --- the room ------------------------------------------------------------- */
+
+/*
+ * The page dips when the filament does. One fixed, pointer-events-none layer
+ * whose opacity is driven by a custom property the bulb writes directly, so a
+ * guttering bulb darkens the room without React re-rendering anything.
+ *
+ * Only while the lights are on: once the bulb is out there is nothing left to
+ * flicker.
+ */
+.roomlight {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: #000;
+  opacity: calc((1 - var(--flicker, 1)) * 0.09);
+}
+
+[data-room="dark"] .roomlight {
+  display: none;
+}
+
+/* --- the background texture ----------------------------------------------- */
+
+/*
+ * Grain, not dots. One turbulence filter multiplied over the page so the paper
+ * has a tooth to it. Fixed and pointer-events none, so it composites once and
+ * is never repainted on scroll.
+ */
+.grain {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--grain);
+  mix-blend-mode: multiply;
+  transition: opacity 1.2s linear;
+}
+
+.page > *:not(.grain):not(.roomlight) {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * The clock takes the full spread because it is the page. Everything that is
+ * read line by line takes a narrower measure, so a board of five sites does not
+ * sit in a thousand pixels with a desert down the middle.
+ */
+.board,
+.ledger,
+.colophon {
+  --column: 54rem;
+}
+
+/* --- the bulb ------------------------------------------------------------- */
+
+/*
+ * The three.js canvas sits in the middle of a pool of light drawn in CSS. A
+ * filament on a white page is a small orange line and reads as nothing on its
+ * own; the pool is what makes it a light source. It shrinks and cools as the
+ * bulb burns down, and it is gone entirely at zero.
+ */
+.bulb {
+  position: relative;
+  width: clamp(7rem, 11vw, 9.5rem);
+  height: clamp(8.5rem, 13vw, 11rem);
+  display: grid;
+  place-items: center;
+}
+
+/*
+ * The pool of light the bulb throws onto the paper. A warm wash rather than
+ * anything additive: on a light ground you cannot make something look lit by
+ * adding brightness, only by tinting what is already there. It shrinks and
+ * cools as the filament does, and is gone at zero.
+ */
+.bulb::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  width: calc(150% * var(--life, 1) + 45%);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, #ffa94e, transparent calc(74% + (1 - var(--life, 1)) * 26%)),
+    transparent 66%
+  );
+  pointer-events: none;
+  transition:
+    width 1.2s linear,
+    background 1.2s linear;
+}
+
+.bulb__scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.bulb__scene canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* --- the first screen ----------------------------------------------------- */
+
+/*
+ * The clock, two lines of copy and the two buttons all fit above the fold, so
+ * nobody has to scroll to find out what the page wants from them.
+ */
+.hero {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.25rem, 3.5vh, 2.25rem);
+  text-align: center;
+}
+
+.hero__copy {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 44ch;
+}
+
+.hero__line {
+  margin: 0;
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+  color: var(--ash);
+  text-wrap: balance;
+}
+
+.hero__line strong {
+  color: var(--ink);
+  font-weight: 620;
+}
+
+.hero__holder {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--faint);
+}
+
+.hero__holder a,
+.hero__holder strong {
+  color: var(--ink);
+  font-weight: 560;
+}
+
+/* --- the clock ------------------------------------------------------------ */
+
+.time-wrap {
+  width: 100%;
+}
+
+.time {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(3.25rem, 16vw, 12rem);
+  font-weight: var(--clock-weight);
+  font-stretch: var(--clock-width);
+  letter-spacing: -0.045em;
+  line-height: 0.85;
+  color: var(--clock-color);
+  font-variant-numeric: tabular-nums;
+  transition:
+    font-weight 0.8s linear,
+    font-stretch 0.8s linear,
+    color 0.8s linear;
+}
+
+/*
+ * Fixed cells. A clock that re-flows when a 1 replaces an 8 reads as a bug,
+ * and the scramble would make it jump every frame.
+ */
+.time__cell {
+  width: var(--cell);
+  text-align: center;
+}
+
+.time__colon {
+  width: var(--colon);
+  text-align: center;
+}
+
+/*
+ * The dread, in one declaration. Two offset copies of the digits sit behind
+ * the ink like a press drifting out of register, and a soft bleed spreads
+ * underneath. All three are variables that are zero until the clock is in
+ * trouble.
+ */
+.time__cell,
+.time__colon {
+  text-shadow:
+    calc(var(--split) * -1) 0 0 var(--ghost-warm),
+    var(--split) 0 0 var(--ghost-cool),
+    0 0 var(--bleed) var(--blood-soft);
+  transition:
+    text-shadow 0.8s linear,
+    color 0.8s linear;
+}
+
+/* --- controls ------------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+/*
+ * The one material effect on the page. Buttons are softly extruded off the
+ * paper and press in on :active, so the only thing that looks touchable is
+ * the thing you are meant to touch.
+ */
+.button {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: var(--card);
+  border-radius: var(--r-ctl);
+  padding: 0.85rem 1.15rem;
+  box-shadow:
+    inset 0 1px 0 0 var(--lift),
+    0 1px 1px 0 rgb(28 26 22 / 0.06),
+    0 6px 14px -6px var(--cast);
+  transition:
+    transform 0.14s var(--ease),
+    box-shadow 0.14s var(--ease),
+    background 0.2s var(--ease);
+}
+
+.button__label {
+  display: block;
+  font-weight: 620;
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+}
+
+.button__note {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ash);
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 0 var(--lift),
+    0 1px 1px 0 rgb(28 26 22 / 0.06),
+    0 10px 20px -8px var(--cast);
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 2px 5px 0 rgb(28 26 22 / 0.16),
+    inset 0 -1px 0 0 var(--lift);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  color: var(--faint);
+  background: var(--paper-sunk);
+  box-shadow: inset 0 2px 5px 0 rgb(28 26 22 / 0.1);
+}
+
+.button--primary {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.14),
+    0 1px 1px 0 rgb(28 26 22 / 0.14),
+    0 8px 18px -7px rgb(28 26 22 / 0.45);
+}
+
+.button--primary .button__note {
+  color: color-mix(in oklab, var(--paper), transparent 28%);
+}
+
+.button--primary:hover:not(:disabled) {
+  background: #22221f;
+}
+
+.button--primary:disabled {
+  background: var(--paper-sunk);
+  color: var(--faint);
+}
+
+.button--primary:disabled .button__note {
+  color: var(--faint);
+}
+
+/* --- checkout ------------------------------------------------------------- */
+
+.checkout {
+  display: grid;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 30rem;
+  text-align: left;
+  padding: clamp(1.25rem, 3vw, 1.75rem);
+  background: var(--card);
+  border-radius: var(--r-panel);
+  box-shadow:
+    inset 0 1px 0 0 var(--lift),
+    0 1px 1px 0 rgb(28 26 22 / 0.06),
+    0 14px 30px -14px var(--cast);
+}
+
+.checkout__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 660;
+  letter-spacing: -0.018em;
+}
+
+.checkout__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--ash);
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.field__label {
+  font-size: 0.75rem;
+  color: var(--ash);
+}
+
+.field input {
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-input);
+  padding: 0.6rem 0.75rem;
+}
+
+.field input::placeholder {
+  color: var(--faint);
+}
+
+.field input:focus {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.checkout__error {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 560;
+  color: var(--blood);
+}
+
+.checkout__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+/* --- the standings -------------------------------------------------------- */
+
+/*
+ * Each site is a card rather than a row in a striped table, because the board
+ * is a list of entities and a table reads as a spreadsheet of them.
+ *
+ * The cards are flat: a hairline edge and a slightly lifted surface, no
+ * extrusion. The buttons are the only extruded things on this page, and that
+ * is what makes them the only things that look touchable. Cards borrowing the
+ * same shadow would spend that signal.
+ */
+.board {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.board__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.board__title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+}
+
+.board__count {
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+
+.board__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+/*
+ * The rank column runs the full height of the card, the site and its detail
+ * stack in the middle, and the two numbers stack on the right. Four cells,
+ * two rows, one shared baseline per row.
+ */
+.site {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "rank title stat  total"
+    "rank meta  stat2 climb";
+  gap: 0.15rem clamp(1rem, 3vw, 2.25rem);
+  align-items: baseline;
+  padding: 0.8rem 1.1rem;
+  line-height: 1.4;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-panel);
+  background: var(--card);
+}
+
+.site__rank {
+  grid-area: rank;
+  align-self: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.site__title {
+  grid-area: title;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.65rem;
+  min-width: 0;
+}
+
+.site__host {
+  font-size: 1.05rem;
+  font-weight: 640;
+  letter-spacing: -0.016em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* Every outbound link, in one place. See components/ui/site-link.tsx. */
+.outlink {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.22em;
+}
+
+.outlink__icon {
+  flex: none;
+  align-self: center;
+  width: 0.75em;
+  height: 0.75em;
+  color: var(--faint);
+  transition: color 0.2s var(--ease);
+}
+
+.outlink:hover .outlink__icon {
+  color: var(--ink);
+}
+
+.site__total {
+  grid-area: total;
+  font-size: 1.05rem;
+  font-weight: 620;
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.site__meta {
+  grid-area: meta;
+  font-size: 0.75rem;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * What the money bought, sitting between the site and the amount so the card
+ * has three zones rather than two clusters at opposite edges of a wide page.
+ */
+.site__stat {
+  grid-area: stat;
+  font-size: 0.75rem;
+  color: var(--ash);
+  white-space: nowrap;
+  min-width: 11ch;
+}
+
+.site__stat--quiet {
+  grid-area: stat2;
+  color: var(--faint);
+}
+
+/*
+ * The cost to pass is the reason anybody reads this board, so it is set as a
+ * real number in ink rather than a faint aside.
+ */
+.site__climb {
+  grid-area: climb;
+  font-size: 0.8125rem;
+  font-weight: 560;
+  color: var(--ink);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.site__climb--top,
+.site__climb--done {
+  font-weight: 400;
+  color: var(--faint);
+}
+
+/*
+ * Colour lands on the numeral, where it labels the position, and as a wash on
+ * the card that is barely past the paper. Anything stronger turns a deadpan
+ * board into a podium.
+ */
+.site--t1 {
+  --tier: var(--tier-1);
+}
+
+.site--t2 {
+  --tier: var(--tier-2);
+}
+
+.site--t3 {
+  --tier: var(--tier-3);
+}
+
+.site--t1,
+.site--t2,
+.site--t3 {
+  background: color-mix(in oklab, var(--tier), var(--card) 96%);
+  border-color: color-mix(in oklab, var(--tier), var(--rule) 74%);
+}
+
+.site--t1 .site__rank,
+.site--t2 .site__rank,
+.site--t3 .site__rank {
+  color: var(--tier);
+}
+
+/* First place also gets the size, because it is the only one worth defending. */
+.site--t1 .site__rank {
+  font-size: 1.4rem;
+}
+
+.site--t1 .site__host,
+.site--t1 .site__total {
+  font-size: 1.15rem;
+}
+
+.site__badge {
+  font-size: 0.6875rem;
+  font-weight: 620;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--blood);
+  white-space: nowrap;
+}
+
+.board__empty {
+  margin: 0;
+  padding: 1.15rem;
+  font-size: 0.875rem;
+  color: var(--faint);
+  border: 1px dashed var(--rule);
+  border-radius: var(--r-panel);
+}
+
+/* --- the ledger ----------------------------------------------------------- */
+
+.ledger {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.ledger__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.ledger__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 620;
+  letter-spacing: -0.016em;
+}
+
+.ledger__count {
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+
+.ledger__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * A register, banded rather than ruled. A hairline under every row is the lazy
+ * default and it turns a list of people into a spreadsheet.
+ */
+.ledger__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.2rem 1.5rem;
+  align-items: baseline;
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--r-row);
+  font-size: 0.875rem;
+  color: var(--ash);
+}
+
+.ledger__row:nth-child(odd) {
+  background: var(--paper-sunk);
+}
+
+.ledger__who {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 540;
+}
+
+.ledger__held {
+  margin-left: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 620;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ash);
+}
+
+.ledger__amount {
+  font-size: 0.875rem;
+  color: var(--ink);
+  text-align: right;
+  min-width: 5ch;
+}
+
+.ledger__added {
+  font-size: 0.8125rem;
+  color: var(--faint);
+  text-align: right;
+  min-width: 15ch;
+}
+
+.ledger__empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--faint);
+}
+
+.colophon {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.75rem;
+  color: var(--faint);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.5rem;
+}
+
+/* --- the dark room -------------------------------------------------------- */
+
+[data-room="dark"] .button {
+  background: var(--card);
+}
+
+[data-room="dark"] .button--primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+[data-room="dark"] .button--primary:hover:not(:disabled) {
+  background: #ffffff;
+}
+
+[data-room="dark"] .field input {
+  background: var(--paper);
+  border-color: var(--rule);
+}
+
+[data-room="dark"] .site--t1,
+[data-room="dark"] .site--t2,
+[data-room="dark"] .site--t3 {
+  background: color-mix(in oklab, var(--tier), var(--card) 88%);
+}
+
+/* --- the escalation ------------------------------------------------------- */
+
+/*
+ * Under an hour. The type thickens and the press starts to drift, in grey.
+ * No colour yet: the accent is still being saved.
+ */
+[data-state="urgent"] {
+  --clock-weight: 800;
+  --clock-width: 115%;
+  --cell: 0.735em;
+  --colon: 0.335em;
+  --split: 0.012em;
+  --ghost-warm: rgb(18 18 17 / 0.16);
+  --ghost-cool: rgb(18 18 17 / 0.1);
+}
+
+[data-state="urgent"] .masthead__status {
+  color: var(--ash);
+}
+
+/*
+ * Under ten minutes. The drift widens, one of the two copies goes arterial,
+ * and the ink starts to bleed into the paper.
+ */
+[data-state="critical"] {
+  --clock-weight: 860;
+  --clock-width: 120%;
+  --cell: 0.79em;
+  --colon: 0.355em;
+  --split: 0.022em;
+  --ghost-warm: var(--blood);
+  --ghost-cool: rgb(18 18 17 / 0.2);
+  --bleed: 0.24em;
+}
+
+[data-state="critical"] .masthead__status,
+[data-state="terminal"] .masthead__status {
+  color: var(--blood);
+}
+
+[data-state="critical"] .ledger,
+[data-state="critical"] .board,
+[data-state="critical"] .colophon {
+  opacity: 0.45;
+}
+
+/*
+ * Under a minute. Everything that is not the number is gone, the clock itself
+ * goes arterial, and the whole thing develops a tremor.
+ */
+[data-state="terminal"] {
+  --clock-weight: 900;
+  --clock-width: 125%;
+  --cell: 0.835em;
+  --colon: 0.375em;
+  --clock-color: var(--blood);
+  /*
+   * The drift closes back up here, deliberately. At this size a wide offset
+   * stops reading as a press out of register and starts reading as a 3D drop
+   * shadow, which is a much cheaper effect. What carries the last minute is
+   * the colour, the weight and the empty page around it, so the ghosts pull
+   * back to a fringe and the bleed does the rest.
+   */
+  --split: 0.011em;
+  --ghost-warm: oklch(0.34 0.13 26 / 0.65);
+  --ghost-cool: oklch(0.34 0.13 26 / 0.4);
+  --bleed: 0.22em;
+}
+
+[data-state="terminal"] .hero__copy,
+[data-state="terminal"] .ledger,
+[data-state="terminal"] .board,
+[data-state="terminal"] .colophon {
+  display: none;
+}
+
+[data-state="terminal"] .time {
+  /* 5.76em of glyphs at this width, so the ceiling is what actually fits. */
+  font-size: clamp(3.25rem, 15vw, 13rem);
+  animation: tremor 260ms steps(2, end) infinite;
+}
+
+/* Half a pixel of shake. Any more and it stops being dread and becomes a toy. */
+@keyframes tremor {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0.5px, -0.5px, 0);
+  }
+  100% {
+    transform: translate3d(-0.5px, 0.5px, 0);
+  }
+}
+
+/* --- the dead state ------------------------------------------------------- */
+
+/*
+ * Everything resets. The press comes back into register, the colour drains,
+ * and the number sits flat and grey on the paper. This page never changes
+ * again, and it should not look like it is about to.
+ */
+[data-state="dead"] {
+  --clock-weight: 760;
+  --clock-width: 112%;
+  --cell: 0.695em;
+  --colon: 0.315em;
+  --clock-color: #c9c9c4;
+  --split: 0em;
+  --bleed: 0em;
+  --blood-soft: transparent;
+}
+
+.verdict {
+  margin: 0;
+  font-size: clamp(1.75rem, 5.5vw, 3.25rem);
+  font-weight: 780;
+  font-stretch: 108%;
+  letter-spacing: -0.04em;
+  line-height: 1.03;
+  text-wrap: balance;
+}
+
+.verdict__when {
+  margin: 0.55rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--faint);
+}
+
+.holder {
+  display: grid;
+  gap: 0.5rem;
+  padding: clamp(1.75rem, 5vh, 3rem) 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  text-align: center;
+}
+
+.holder__eyebrow {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.holder__name {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 4rem);
+  font-weight: 800;
+  font-stretch: 114%;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+}
+
+.holder__meta {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ash);
+}
+
+.stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(1rem, 3vw, 2rem);
+}
+
+.stats li {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.stats__value {
+  font-size: clamp(1.25rem, 3vw, 1.9rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats__label {
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
+/* --- responsive ----------------------------------------------------------- */
+
+@media (max-width: 40rem) {
+  .stats {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .site {
+    grid-template-columns: 1.9rem minmax(0, 1fr) auto;
+    grid-template-areas:
+      "rank title title"
+      "rank meta  total"
+      "rank stat  stat2"
+      "rank climb climb";
+    gap: 0.25rem 0.9rem;
+  }
+
+  .site__climb {
+    text-align: left;
+  }
+
+  .site__stat {
+    min-width: 0;
+  }
+
+  .site__stat--quiet {
+    text-align: right;
+  }
+
+  .ledger__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ledger__added {
+    grid-column: 1 / -1;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions .button {
+    flex: 1 1 100%;
+  }
+}
+
+/*
+ * The tremor and the scramble both exist to say the clock is failing. Under
+ * reduced motion that job is carried by weight, drift and colour, which are
+ * all static and all still work.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-state="terminal"] .time {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "lastlight",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test lib/*.test.ts"
+  },
+  "dependencies": {
+    "@openpanel/nextjs": "^1.5.1",
+    "@phosphor-icons/react": "^2.1.10",
+    "@upstash/redis": "^1.35.0",
+    "motion": "^13.1.1",
+    "next": "^15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/three": "^0.185.4",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.0"
+  }
+}
