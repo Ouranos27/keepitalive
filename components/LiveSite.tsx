@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { useEffect, useRef } from "react";
 import { useReducedMotion } from "motion/react";
 import {
   INITIAL_SECONDS,
@@ -11,7 +10,8 @@ import {
   degradationState,
   formatUsd,
 } from "@/lib/clock";
-import { paletteFor, paletteVars, rgb } from "@/lib/theme";
+import { poolFor } from "@/lib/theme";
+import { useLightPool } from "@/lib/useLightPool";
 import { useServerClock } from "@/lib/useServerClock";
 import type { SiteState } from "@/lib/types";
 import { Checkout } from "./Checkout";
@@ -52,28 +52,20 @@ export function LiveSite({ initial }: { initial: SiteState }) {
   const life = Math.sqrt(Math.max(0, Math.min(1, remaining / INITIAL_SECONDS)));
 
   /*
-   * The bulb is the light source, so the room it lights is derived from the
-   * same clock. The palette is computed rather than authored because it has to
-   * stay readable at every point of the transition; see lib/theme.ts.
+   * The bulb is the light source, so what the clock drives is how far its
+   * light reaches. Sections inside the pool are lit, the rest are in the dark;
+   * see lib/theme.ts for why it is a shrinking pool rather than a fade.
    */
-  const palette = paletteFor(remaining);
-
-  // The page paints its own ground, but overscroll shows the document's, so
-  // the root has to follow the room or the dark page flashes white at the edge.
-  const painted = useRef<string | null>(null);
-  useEffect(() => {
-    const ground = rgb(palette.bg);
-    if (painted.current === ground) return;
-    painted.current = ground;
-    document.documentElement.style.setProperty("--root-ground", ground);
-  }, [palette.bg]);
+  const pool = poolFor(remaining);
+  const page = useLightPool(pool);
 
   return (
     <main
       className="page"
       data-state={phase}
-      data-room={palette.dark ? "dark" : "lit"}
-      style={paletteVars(palette) as React.CSSProperties}
+      data-room="lit"
+      ref={page}
+      style={{ "--pool": pool } as React.CSSProperties}
     >
       {/*
         The room dips when the filament does. The bulb writes --flicker
@@ -83,12 +75,12 @@ export function LiveSite({ initial }: { initial: SiteState }) {
       <span className="roomlight" />
       <PaperGrain />
 
-      <header className="masthead">
+      <header className="masthead" data-zone data-room="lit">
         <span className="masthead__domain">lastlight.lol</span>
         <span className="masthead__status">{CONDITION[phase] ?? "Alive"}</span>
       </header>
 
-      <section className="hero">
+      <section className="hero" data-zone data-room="lit">
         <div className="bulb" style={{ "--life": life.toFixed(3) } as React.CSSProperties}>
           <Bulb life={life} reduceMotion={reduceMotion} />
         </div>
@@ -147,7 +139,7 @@ export function LiveSite({ initial }: { initial: SiteState }) {
 
       <Ledger entries={state.ledger} total={state.total_payers} truncated />
 
-      <footer className="colophon">
+      <footer className="colophon" data-zone data-room="lit">
         <span>Time gets cheaper as the clock runs down. Standing only gets more expensive.</span>
         <span>Nothing revives this page after zero.</span>
       </footer>

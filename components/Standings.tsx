@@ -19,18 +19,21 @@ export function Standings({
   heading = "The standings",
   limit,
   final = false,
+  room = "lit",
 }: {
   standings: Standing[];
   heading?: string;
   /** The live page shows a head of the board; the memorial shows all of it. */
   limit?: number;
+  /** Which room this section starts in; the light pool takes over after mount. */
+  room?: "lit" | "dark";
   /** On the dead page nobody can be passed, so the cost to climb is dropped. */
   final?: boolean;
 }) {
   const shown = limit ? standings.slice(0, limit) : standings;
 
   return (
-    <section className="board">
+    <section className="board" data-zone data-room={room}>
       <div className="board__head">
         <h2 className="board__title">{heading}</h2>
         <span className="board__count mono">

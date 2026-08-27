@@ -18,25 +18,15 @@
   color-scheme: light;
 
   /*
-   * The lit room, as a fallback. The live palette is computed in lib/theme.ts
-   * and set inline on <main>, because it has to interpolate toward a dark room
-   * without any text dropping below AA on the way. These values are what the
-   * page paints with before that arrives.
+   * How far the light reaches, as a multiple of the viewport's larger side,
+   * and where it is centred. Written by LiveSite from the clock; see
+   * lib/theme.ts for why the light shrinks instead of the page fading.
    */
-  --paper: rgb(243 243 241);
-  --paper-sunk: #ececea;
-  --card: rgb(251 251 250);
-  --ink: rgb(18 18 17);
-  --ash: rgb(92 92 87);
-  --faint: rgb(108 108 102);
-  --rule: rgb(220 220 216);
-
-  /*
-   * One accent, locked to the page: arterial. It is spent entirely on the
-   * clock, and only in the last ten minutes, so its arrival is information.
-   */
-  --blood: rgb(178 34 26);
-  --blood-soft: color-mix(in oklab, var(--blood), transparent 72%);
+  --pool: 1.75;
+  --pool-x: 50%;
+  --pool-y: 22%;
+  /* How soft the edge of the light is. A real pool of lamplight has an edge. */
+  --pool-edge: 0.32;
 
   /*
    * The board's tiers, graded by heat rather than by medal: the closer to the
@@ -73,8 +63,6 @@
   --r-input: 0.625rem;
   --r-row: 0.5rem;
 
-  /* How much tooth the paper has. Set with the palette; none in the dark. */
-  --grain: 0.055;
   /* 1 while the filament is steady, dipping as it gutters. Written by the bulb. */
   --flicker: 1;
 
@@ -85,6 +73,44 @@
   --gutter: clamp(1.25rem, 5vw, 4rem);
   --column: 68rem;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+ * The two rooms.
+ *
+ * Exactly two palettes and nothing between them. Anything inside the pool of
+ * light uses the lit one; anything outside uses the dark one. There is no
+ * interpolation, which is what keeps every part of the page out of the mid
+ * grey where neither dark nor light text is readable.
+ *
+ * lib/theme.ts holds the same values and a test fails if the two disagree.
+ */
+[data-room="lit"] {
+  --paper: rgb(243 243 241);
+  --card: rgb(251 251 250);
+  --paper-sunk: rgb(236 236 234);
+  --ink: rgb(18 18 17);
+  --ash: rgb(92 92 87);
+  --faint: rgb(103 103 97);
+  --rule: rgb(220 220 216);
+  --blood: rgb(178 34 26);
+  --lift: #ffffff;
+  --cast: rgb(28 26 22 / 0.22);
+  --grain: 0.055;
+}
+
+[data-room="dark"] {
+  --paper: rgb(13 11 10);
+  --card: rgb(26 23 21);
+  --paper-sunk: rgb(22 19 18);
+  --ink: rgb(244 238 232);
+  --ash: rgb(198 187 176);
+  --faint: rgb(163 152 141);
+  --rule: rgb(58 52 47);
+  --blood: rgb(255 138 112);
+  --lift: rgb(255 245 235 / 0.08);
+  --cast: rgb(0 0 0 / 0.6);
+  --grain: 0;
 }
 
 *,
@@ -100,7 +126,8 @@ body {
 }
 
 html {
-  background: var(--root-ground, var(--paper));
+  /* The room beyond the page. Overscroll should not flash paper. */
+  background: rgb(13 11 10);
 }
 
 body {
@@ -156,11 +183,22 @@ a:hover {
   color: var(--ink);
   --clock-color: var(--ink);
   --blood-soft: color-mix(in oklab, var(--blood), transparent 72%);
-  background: var(--paper);
+
+  /*
+   * The pool of light, centred on the bulb. Paper inside it, near-black
+   * outside, with a soft but real edge between. The radius is what the clock
+   * drives, so the light closes in rather than the page fading.
+   */
+  background:
+    radial-gradient(
+      circle at var(--pool-x) var(--pool-y),
+      rgb(243 243 241) 0%,
+      rgb(243 243 241) calc(var(--pool) * (1 - var(--pool-edge)) * 100vmax),
+      rgb(13 11 10) calc(var(--pool) * (1 + var(--pool-edge)) * 100vmax),
+      rgb(13 11 10) 100%
+    );
   min-height: 100svh;
-  transition:
-    background-color 1.2s linear,
-    color 1.2s linear;
+  transition: color 1.2s linear;
   padding: clamp(1rem, 2.5vh, 1.75rem) var(--gutter) var(--gutter);
   display: flex;
   flex-direction: column;
@@ -199,6 +237,29 @@ a:hover {
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--faint);
+}
+
+/*
+ * Each section carries its own ground.
+ *
+ * The pool has a soft edge, and text sitting on that edge would be dark ink on
+ * a half-dark ground, which is the unreadable middle the whole design exists
+ * to avoid. Painting the section keeps every block of text on one room's
+ * ground or the other's, and the soft edge is then only ever visible in the
+ * gaps between sections, which is where the edge of a real pool of lamplight
+ * would fall.
+ *
+ * The spread shadow is what stops them reading as boxes: it bleeds each
+ * section's ground outward into the gradient so the light has no hard corners.
+ */
+[data-zone] {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 0 5rem 0 var(--paper);
+  transition:
+    background-color 0.9s linear,
+    color 0.9s linear,
+    box-shadow 0.9s linear;
 }
 
 /* --- the room ------------------------------------------------------------- */
@@ -907,16 +968,6 @@ a:hover {
 
 /* --- the dark room -------------------------------------------------------- */
 
-/*
- * The clay lights from above, so in the dark the highlight becomes a faint
- * rim rather than white, and the cast shadow deepens. Everything else follows
- * the palette on its own.
- */
-[data-room="dark"] {
-  --lift: rgb(255 255 255 / 0.07);
-  --cast: rgb(0 0 0 / 0.55);
-}
-
 [data-room="dark"] .button {
   background: var(--card);
 }
@@ -1116,6 +1167,8 @@ a:hover {
 .stats li {
   display: grid;
   gap: 0.2rem;
+  justify-items: center;
+  text-align: center;
 }
 
 .stats__value {

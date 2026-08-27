@@ -17,6 +17,7 @@ export function Ledger({
   heading = "The ledger",
   truncated = false,
   emptyMessage,
+  room = "lit",
 }: {
   entries: LedgerEntry[];
   total: number;
@@ -24,9 +25,11 @@ export function Ledger({
   truncated?: boolean;
   /** The dead page cannot sell a line, so it says something else. */
   emptyMessage?: string;
+  /** Which room this section starts in; the light pool takes over after mount. */
+  room?: "lit" | "dark";
 }) {
   return (
-    <section className="ledger">
+    <section className="ledger" data-zone data-room={room}>
       <div className="ledger__head">
         <h2 className="ledger__title">{heading}</h2>
         <span className="ledger__count mono">

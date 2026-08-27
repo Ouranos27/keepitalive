@@ -238,26 +238,33 @@ hidden or the filament is cold, and the page is complete without WebGL.
 
 ### The room
 
-The bulb is not decoration, it is the light source, and the page is lit by it.
-As the filament burns down the room dims; when the bulb goes, the site is in the
-dark for good and the memorial stays there.
+The bulb is not decoration, it is the light source. What the clock drives is not
+the page's brightness but the **reach** of the light: a radial pool centred on
+the filament that closes in as it fails, until nothing is lit at all.
 
-That transition has an accessibility problem that is easy to ship without
-noticing: interpolating a light page into a dark one passes through a band where
-near-black text and near-white text **both** fail against the background. There
-is no crossover point where a straight swap is readable. So the dimming stops
-while the page is still comfortably light, and the page crosses the bad band in
-one step, which is the lights going out. Both sides of that step clear 6:1.
+That shape is doing real work. An earlier version faded the whole page from
+paper to black, which forced it through a band of mid grey where neither dark
+nor light text clears AA, and which looked muddy the entire way. A shrinking
+pool never produces that grey. Every part of the page is either inside the
+light, on paper with dark ink, or outside it, on a warm near-black with bone
+text. There are exactly two palettes and nothing in between.
 
-Because the invariant has to hold at every second rather than at the two ends,
-the palette is computed in `lib/theme.ts` rather than authored in CSS, and
-`theme.test.ts` sweeps the whole clock and fails if any token drops below WCAG
-AA against either the page or a card. The accent moves with the room for the
-same reason: no single red clears AA on paper and on near-black.
+Sections carry their own ground rather than letting the gradient show through
+them, which is the part that keeps it readable: a gradient has a soft edge, and
+text on that edge would be dark ink on a half-dark ground. Painting the section
+means every block of text sits on one room's ground or the other's, and the soft
+edge is only ever visible in the gaps between them, which is where the edge of a
+real pool of lamplight would fall anyway. A spread shadow bleeds each ground
+outward so they do not read as boxes.
 
-Writing that test caught a bug that predated it. The old tertiary grey was
-2.25:1 on paper, which is nowhere near AA, and had been there since the first
-light design.
+Which room a section is in is measured in `lib/useLightPool.ts` against the pool
+radius, on layout change rather than on scroll: the pool is anchored to the page,
+not the viewport, so scrolling cannot change what is lit.
+
+`theme.test.ts` holds both palettes to WCAG AA on every surface they use, checks
+the dark room is warm rather than grey, and fails if the tokens drift from the
+copies in `globals.css`. Writing those checks caught three sub-AA values that
+had already shipped, the worst of them tertiary text at 2.25:1.
 
 The bulb's guttering drives the room. One value per frame, shared by the
 filament, the lamp, the glow shader and a fixed overlay, so when the light dips

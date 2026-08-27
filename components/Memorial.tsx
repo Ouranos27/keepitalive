@@ -1,5 +1,5 @@
 import { formatDuration, formatUsd } from "@/lib/clock";
-import { paletteFor, paletteVars } from "@/lib/theme";
+
 import { formatStamp } from "@/lib/format";
 import type { SiteState } from "@/lib/types";
 import { DeadBulb } from "./DeadBulb";
@@ -31,16 +31,16 @@ export function Memorial({ state }: { state: SiteState }) {
       className="page"
       data-state="dead"
       data-room="dark"
-      style={{ ...paletteVars(paletteFor(0)) } as React.CSSProperties}
+      style={{ "--pool": 0 } as React.CSSProperties}
     >
       <PaperGrain />
 
-      <header className="masthead">
+      <header className="masthead" data-zone data-room="dark">
         <span className="masthead__domain">lastlight.lol</span>
         <span className="masthead__status">Dead</span>
       </header>
 
-      <section className="hero">
+      <section className="hero" data-zone data-room="dark">
         <DeadBulb />
         <DeadClock />
         <div className="hero__copy">
@@ -56,7 +56,7 @@ export function Memorial({ state }: { state: SiteState }) {
         </div>
       </section>
 
-      <section className="holder">
+      <section className="holder" data-zone data-room="dark">
         <p className="holder__eyebrow">The last light</p>
         {holder ? (
           <>
@@ -76,7 +76,7 @@ export function Memorial({ state }: { state: SiteState }) {
         )}
       </section>
 
-      <ul className="stats">
+      <ul className="stats" data-zone data-room="dark">
         <li>
           <span className="stats__value mono">{formatUsd(frozen?.total_raised ?? 0)}</span>
           <span className="stats__label">Total raised</span>
@@ -91,16 +91,17 @@ export function Memorial({ state }: { state: SiteState }) {
         </li>
       </ul>
 
-      <Standings standings={state.standings} heading="The final standings" final />
+      <Standings standings={state.standings} heading="The final standings" final room="dark" />
 
       <Ledger
         entries={chronological}
         total={frozen?.total_payers ?? state.total_payers}
         heading="Everyone who paid, in order"
         emptyMessage="Nobody ever paid."
+        room="dark"
       />
 
-      <footer className="colophon">
+      <footer className="colophon" data-zone data-room="dark">
         <span>The clock cannot be restarted.</span>
         <span>Links are sponsored and nofollowed.</span>
       </footer>

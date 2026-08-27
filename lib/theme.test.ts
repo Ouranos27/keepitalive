@@ -1,141 +1,113 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
-import {
-  LIGHTS_OUT_SECONDS,
-  contrast,
-  duskProgress,
-  luminance,
-  paletteFor,
-  paletteVars,
-} from "./theme";
+import { DARK, LIT, contrast, luminance, poolFor, rgb, type Palette } from "./theme";
 
 const FULL = 24 * 60 * 60;
 
 /** WCAG AA: 4.5 for body text, 3 for hairlines and other non-text. */
 const AA_TEXT = 4.5;
-const AA_NON_TEXT = 3;
 
-/** Every second of a full clock, sampled finely enough to catch a bad band. */
-function sweep(): number[] {
-  const points: number[] = [];
-  for (let remaining = FULL; remaining >= 0; remaining -= 60) points.push(remaining);
-  // The seconds either side of the switch, where a naive ramp goes unreadable.
-  for (const edge of [LIGHTS_OUT_SECONDS + 2, LIGHTS_OUT_SECONDS + 1, LIGHTS_OUT_SECONDS, LIGHTS_OUT_SECONDS - 1, 30, 5, 1, 0]) {
-    points.push(edge);
-  }
-  return points;
-}
+const ROOMS: Array<[string, Palette]> = [
+  ["lit", LIT],
+  ["dark", DARK],
+];
 
-test("every text token clears AA at every point of the clock", () => {
-  // This is the whole reason the palette is computed rather than authored: a
-  // light page interpolated into a dark one passes through a band where both
-  // near-black and near-white text fail, and nothing in CSS would tell us.
-  for (const remaining of sweep()) {
-    const palette = paletteFor(remaining);
-    for (const token of ["ink", "ash", "faint"] as const) {
-      const ratio = contrast(palette[token], palette.bg);
-      assert.ok(
-        ratio >= AA_TEXT,
-        `${token} on bg is ${ratio.toFixed(2)}:1 at ${remaining}s remaining, below ${AA_TEXT}`,
-      );
+test("every text token clears AA in both rooms, on the ground and on cards", () => {
+  // There are exactly two palettes and nothing between them, which is the
+  // whole reason the pool shrinks rather than the page fading: a fade passes
+  // through a band of grey where neither dark nor light text clears AA.
+  for (const [name, palette] of ROOMS) {
+    for (const ground of ["bg", "card", "sunk"] as const) {
+      for (const token of ["ink", "ash", "faint", "blood"] as const) {
+        const ratio = contrast(palette[token], palette[ground]);
+        assert.ok(ratio >= AA_TEXT, `${name}: ${token} on ${ground} is ${ratio.toFixed(2)}:1`);
+      }
     }
   }
 });
 
-test("text clears AA against card surfaces too, not just the page", () => {
-  for (const remaining of sweep()) {
-    const palette = paletteFor(remaining);
-    for (const token of ["ink", "ash", "faint"] as const) {
-      const ratio = contrast(palette[token], palette.card);
-      assert.ok(
-        ratio >= AA_TEXT,
-        `${token} on card is ${ratio.toFixed(2)}:1 at ${remaining}s remaining`,
-      );
-    }
-  }
-});
-
-test("hairlines stay visible without being text", () => {
-  for (const remaining of sweep()) {
-    const palette = paletteFor(remaining);
+test("hairlines are visible without shouting", () => {
+  for (const [name, palette] of ROOMS) {
     const ratio = contrast(palette.rule, palette.bg);
-    assert.ok(ratio >= 1.2, `rule is invisible at ${remaining}s (${ratio.toFixed(2)}:1)`);
-    assert.ok(ratio < AA_NON_TEXT * 2, `rule is shouting at ${remaining}s (${ratio.toFixed(2)}:1)`);
+    assert.ok(ratio >= 1.2, `${name}: rule is invisible (${ratio.toFixed(2)}:1)`);
+    assert.ok(ratio < 6, `${name}: rule is shouting (${ratio.toFixed(2)}:1)`);
   }
 });
 
-test("the lights go out in one step, because a gradual crossing cannot stay readable", () => {
-  const before = paletteFor(LIGHTS_OUT_SECONDS + 1);
-  const after = paletteFor(LIGHTS_OUT_SECONDS);
-
-  assert.equal(before.dark, false);
-  assert.equal(after.dark, true);
-
-  // The jump has to clear the unreadable band outright rather than ease into it.
-  const dropped = luminance(before.bg) - luminance(after.bg);
-  assert.ok(dropped > 0.25, `the room only dropped ${dropped.toFixed(3)} of luminance`);
-
-  // Both sides of the step are comfortably readable, which is the point.
-  assert.ok(contrast(before.ink, before.bg) >= 6, "the last lit frame must be easy to read");
-  assert.ok(contrast(after.ink, after.bg) >= 6, "the first dark frame must be easy to read");
+test("the dark room is warm and not grey", () => {
+  // The complaint the pool was built to answer: mid greys look muddy, and grey
+  // text on a grey ground is the worst of it. Everything dark here is warm,
+  // and the text on it is bone rather than a neutral.
+  assert.ok(luminance(DARK.bg) < 0.02, "the dark ground must be genuinely dark, not charcoal");
+  for (const token of ["ink", "ash", "faint"] as const) {
+    const [r, , b] = DARK[token];
+    assert.ok(r > b, `dark ${token} is not warm (r ${r} should exceed b ${b})`);
+  }
+  // Nothing in the dark room sits in the muddy middle.
+  for (const token of ["bg", "card", "sunk"] as const) {
+    assert.ok(luminance(DARK[token]) < 0.05, `dark ${token} is drifting toward grey`);
+  }
 });
 
-test("the page only ever gets darker", () => {
+test("the light closes in, and never opens back up", () => {
   let previous = Infinity;
   for (let remaining = FULL; remaining >= 0; remaining -= 30) {
-    const here = luminance(paletteFor(remaining).bg);
-    assert.ok(here <= previous + 1e-9, `the room got brighter at ${remaining}s remaining`);
-    previous = here;
+    const pool = poolFor(remaining);
+    assert.ok(pool <= previous + 1e-9, `the light grew at ${remaining}s remaining`);
+    previous = pool;
   }
 });
 
-test("most of the day is spent close to full brightness", () => {
-  // A page that is grey all afternoon has spent its dimming too early.
-  assert.ok(duskProgress(FULL) < 0.01, "a full clock is not dimmed");
-  assert.ok(duskProgress(12 * 3600) < 0.3, "half way through should still read as daylight");
-  assert.ok(duskProgress(3600) > 0.85, "the last hour should be visibly failing");
-  assert.equal(duskProgress(LIGHTS_OUT_SECONDS), 1);
+test("the pool covers the page for most of the day and closes at the end", () => {
+  assert.ok(poolFor(FULL) > 1.4, "a full clock is lit corner to corner");
+  assert.ok(poolFor(12 * 3600) > 1.1, "half way through, still comfortably lit");
+  assert.ok(poolFor(3600) < 0.6, "the last hour lights little more than the clock");
+  assert.ok(poolFor(600) < 0.35, "the last ten minutes are nearly out");
+  assert.equal(poolFor(0), 0, "at zero there is no light at all");
 });
 
-test("dusk never reaches the dark palette by interpolation alone", () => {
-  // If the ramp could arrive at dark on its own, the step would be pointless
-  // and the unreadable band would be back.
-  const lastLit = paletteFor(LIGHTS_OUT_SECONDS + 1);
-  assert.ok(luminance(lastLit.bg) > 0.3, "dusk must stop while it is still a light page");
-  assert.equal(lastLit.dark, false);
-});
-
-test("a dead clock is dark, and stays dark", () => {
-  for (const remaining of [LIGHTS_OUT_SECONDS, 60, 1, 0, -5]) {
-    assert.equal(paletteFor(remaining).dark, true, `${remaining}s should be dark`);
+test("a clock past zero stays dark rather than going negative", () => {
+  for (const remaining of [0, -1, -600]) {
+    assert.equal(poolFor(remaining), 0, `${remaining}s should be fully dark`);
   }
 });
 
-test("the palette exports as CSS variables the page can consume", () => {
-  const vars = paletteVars(paletteFor(FULL));
-  assert.deepEqual(Object.keys(vars).sort(), [
-    "--ash",
-    "--blood",
-    "--card",
-    "--faint",
-    "--grain",
-    "--ink",
-    "--paper",
-    "--rule",
-  ]);
-  assert.match(vars["--paper"], /^rgb\(\d+ \d+ \d+\)$/);
+test("a clock over its ceiling does not overshoot the pool", () => {
+  // Payments can push the clock past 24h, which must not produce a light
+  // brighter than "everything".
+  assert.equal(poolFor(72 * 3600), poolFor(FULL));
 });
 
-test("the accent is badge text, so it clears AA in every room", () => {
-  // No single red clears AA on paper and on a near-black ground, which is why
-  // the accent moves with the palette instead of being a constant.
-  for (const remaining of sweep()) {
-    const palette = paletteFor(remaining);
-    for (const ground of ["bg", "card"] as const) {
-      const ratio = contrast(palette.blood, palette[ground]);
-      assert.ok(
-        ratio >= AA_TEXT,
-        `accent on ${ground} is ${ratio.toFixed(2)}:1 at ${remaining}s remaining`,
+test("the palettes in globals.css have not drifted from these", () => {
+  // The tokens exist twice: here, where they are tested, and in the stylesheet,
+  // where they are used. This is the guard against the two disagreeing.
+  const css = readFileSync(join(import.meta.dirname, "..", "app", "globals.css"), "utf8");
+
+  for (const [name, palette] of ROOMS) {
+    const block = css.match(new RegExp(`\\[data-room="${name}"\\]\\s*\\{([^}]*)\\}`));
+    assert.ok(block, `globals.css has no [data-room="${name}"] block`);
+
+    const tokens: Array<[string, keyof Palette]> = [
+      ["--paper", "bg"],
+      ["--card", "card"],
+      ["--paper-sunk", "sunk"],
+      ["--ink", "ink"],
+      ["--ash", "ash"],
+      ["--faint", "faint"],
+      ["--rule", "rule"],
+      ["--blood", "blood"],
+    ];
+    for (const [property, key] of tokens) {
+      const declared: RegExpMatchArray | null = block![1].match(
+        new RegExp(`${property}:\\s*([^;]+);`),
+      );
+      assert.ok(declared, `${name} room is missing ${property}`);
+      assert.equal(
+        declared![1].trim(),
+        rgb(palette[key]),
+        `${name} ${property} in globals.css disagrees with theme.ts`,
       );
     }
   }
