@@ -94,6 +94,14 @@ and refuses payments), simulated payments left on, a `CLOCK_LAUNCH_AT` in second
 rather than milliseconds, a relative `NEXT_PUBLIC_SITE_URL`, a `POLAR_SERVER`
 typo, missing analytics. `lib/env.test.ts` covers each case.
 
+Analytics can point at a self-hosted OpenPanel instead of the hosted cloud:
+`NEXT_PUBLIC_OPENPANEL_API_URL` is the API origin, and omitting it leaves the
+SDK on openpanel.dev. That one is easy to get wrong quietly, because a bad value
+does not break anything visible: the SDK falls back to the cloud and the
+self-hosted instance simply stays empty. So a value that is not an absolute
+http(s) URL is dropped with a warning rather than handed to the SDK, and a
+variable whose name only nearly matches is named on the boot log.
+
 Useful for looking at a state you would otherwise have to wait for:
 `CLOCK_LAUNCH_AT` is a unix-ms instant the clock started, so setting it into the
 past starts the app near death, and setting it far enough back starts it dead.

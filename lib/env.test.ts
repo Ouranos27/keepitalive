@@ -247,6 +247,76 @@ test("missing analytics is a warning in production only", () => {
   );
 });
 
+// --- self-hosted analytics -------------------------------------------------
+//
+// The endpoint is the one setting here that fails silently when it is wrong:
+// the SDK falls back to OpenPanel's cloud, the build is green, and the
+// self-hosted instance simply stays empty.
+
+test("a self-hosted analytics endpoint is read and boots clean", () => {
+  const env = { ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: "https://api-openpanel.example.com" };
+  assert.equal(readConfig(env).analyticsApiUrl, "https://api-openpanel.example.com");
+  assert.deepEqual(inspectConfig(env), []);
+});
+
+test("no endpoint means the hosted cloud, which is not a problem", () => {
+  assert.equal(readConfig(LIVE).analyticsApiUrl, null);
+  assert.ok(!warnKeys(LIVE).includes("NEXT_PUBLIC_OPENPANEL_API_URL"));
+});
+
+test("an endpoint that is not an absolute http(s) URL is dropped, not passed on", () => {
+  // Handing it to the SDK would post every event at an unusable address and
+  // lose the lot. Falling back to the cloud at least keeps them.
+  for (const bad of ["api-openpanel.example.com", "ftp://api-openpanel.example.com", "/api"]) {
+    const env = { ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: bad };
+    assert.equal(readConfig(env).analyticsApiUrl, null, `${bad} should be dropped`);
+    assert.ok(warnKeys(env).includes("NEXT_PUBLIC_OPENPANEL_API_URL"), `${bad} should warn`);
+  }
+});
+
+test("an endpoint is trimmed and a whitespace-only one counts as unset", () => {
+  assert.equal(
+    readConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: " https://api.example.com\n" })
+      .analyticsApiUrl,
+    "https://api.example.com",
+  );
+  const blank = { ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: "   " };
+  assert.equal(readConfig(blank).analyticsApiUrl, null);
+  assert.ok(!warnKeys(blank).includes("NEXT_PUBLIC_OPENPANEL_API_URL"));
+});
+
+test("a misspelled endpoint variable is named rather than ignored", () => {
+  // Vercel stores whatever name was typed, so nothing else would ever mention
+  // it: the deploy succeeds and the self-hosted instance records nothing.
+  for (const typo of [
+    "NEX_PUBLI_OPENPANEL_API_URL",
+    "NEXT_PUBLIC_OPENPANEL_APIURL",
+    "NEXT_PUBLIC_OPENPANEL_API_URL_",
+  ]) {
+    const warnings = inspectConfig({ ...LIVE, [typo]: "https://api-openpanel.example.com" }).filter(
+      (p) => p.key === typo,
+    );
+    assert.equal(warnings.length, 1, `${typo} should be called out exactly once`);
+    assert.match(warnings[0].message, /NEXT_PUBLIC_OPENPANEL_API_URL/);
+  }
+
+  // The correct spelling must not accuse itself of being a typo.
+  assert.deepEqual(
+    inspectConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: "https://api-openpanel.example.com" }),
+    [],
+  );
+});
+
+test("an endpoint without a client id never gets called, and says so", () => {
+  const env = {
+    ...LIVE,
+    NEXT_PUBLIC_OPENPANEL_CLIENT_ID: undefined,
+    NEXT_PUBLIC_OPENPANEL_API_URL: "https://api-openpanel.example.com",
+  };
+  const warnings = warnKeys(env).filter((key) => key === "NEXT_PUBLIC_OPENPANEL_CLIENT_ID");
+  assert.equal(warnings.length, 2, "both the missing id and the orphaned endpoint are named");
+});
+
 test("a bare development environment is usable and says so", () => {
   const problems = inspectConfig({ NODE_ENV: "development" });
   assert.deepEqual(problems.filter((p) => p.level === "fatal"), [], "local dev must always boot");
@@ -257,6 +327,15 @@ test("the summary line names the state without printing a secret", () => {
   const line = describeConfig(LIVE);
   assert.match(line, /store: upstash/);
   assert.match(line, /payments: polar \(production\)/);
+  assert.match(line, /analytics: openpanel cloud/);
+  assert.match(
+    describeConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_API_URL: "https://api.example.com" }),
+    /analytics: self-hosted \(https:\/\/api\.example\.com\)/,
+  );
+  assert.match(
+    describeConfig({ ...LIVE, NEXT_PUBLIC_OPENPANEL_CLIENT_ID: undefined }),
+    /analytics: off/,
+  );
   for (const secret of ["polar_at_x", "whsec_x", "token", "prod_x"]) {
     assert.ok(!line.includes(secret), `${secret} must not appear in a log line`);
   }

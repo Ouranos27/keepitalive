@@ -64,9 +64,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Analytics only when a client id is configured, so a local run and a
           preview deploy send nothing. There is one page here, so screen views
           are the whole of what there is to measure.
+
+          apiUrl points the SDK at a self-hosted OpenPanel. It is spread in
+          rather than passed as undefined because the component serialises its
+          options into an inline script, and an absent key is what the SDK's
+          own fallback to the hosted cloud is written against.
         */}
         {config.analyticsClientId ? (
-          <OpenPanelComponent clientId={config.analyticsClientId} trackScreenViews />
+          <OpenPanelComponent
+            clientId={config.analyticsClientId}
+            {...(config.analyticsApiUrl ? { apiUrl: config.analyticsApiUrl } : {})}
+            trackScreenViews
+          />
         ) : null}
       </body>
     </html>

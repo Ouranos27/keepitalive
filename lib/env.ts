@@ -25,6 +25,12 @@ export type Config = {
   } | null;
   siteUrl: string;
   analyticsClientId: string | null;
+  /**
+   * Where the OpenPanel SDK posts its events. Null means openpanel.dev's own
+   * cloud, which is the SDK's default; a URL here points it at a self-hosted
+   * instance instead.
+   */
+  analyticsApiUrl: string | null;
   /** Unix ms the clock started, or null to start it at first read. */
   launchAt: number | null;
   allowSimulatedPayments: boolean;
@@ -42,6 +48,18 @@ const DEFAULT_SITE_URL = "https://lastlight.lol";
 
 /** Anything before this as a millisecond timestamp is a seconds value by mistake. */
 const MS_FLOOR = 1_000_000_000_000;
+
+/** The one spelling the SDK is wired to. Typos here fail silently, so it is named once. */
+const ANALYTICS_API_URL = "NEXT_PUBLIC_OPENPANEL_API_URL";
+
+function absoluteHttp(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 function trimmed(value: string | undefined): string | null {
   const text = value?.trim();
@@ -80,6 +98,11 @@ export function readConfig(env: Env): Config {
 
   const launchAt = Number(env.CLOCK_LAUNCH_AT);
 
+  // A malformed endpoint is dropped rather than handed to the SDK: the SDK
+  // would post events at it and lose every one. Falling back to the cloud
+  // keeps the site measurable, and inspectConfig says so out loud.
+  const analyticsApiUrl = trimmed(env[ANALYTICS_API_URL]);
+
   return {
     redis: redis ? { url: redis.url, token: redis.token } : null,
     // All three or nothing. Two out of three is the dangerous shape: it takes
@@ -95,6 +118,7 @@ export function readConfig(env: Env): Config {
         : null,
     siteUrl: trimmed(env.NEXT_PUBLIC_SITE_URL) ?? DEFAULT_SITE_URL,
     analyticsClientId: trimmed(env.NEXT_PUBLIC_OPENPANEL_CLIENT_ID),
+    analyticsApiUrl: analyticsApiUrl && absoluteHttp(analyticsApiUrl) ? analyticsApiUrl : null,
     launchAt: Number.isFinite(launchAt) && launchAt > 0 ? launchAt : null,
     allowSimulatedPayments: env.ALLOW_SIMULATED_PAYMENTS === "1",
     production: env.NODE_ENV === "production",
@@ -192,10 +216,7 @@ export function inspectConfig(env: Env): Problem[] {
   }
 
   if (trimmed(env.NEXT_PUBLIC_SITE_URL) !== null) {
-    try {
-      const url = new URL(config.siteUrl);
-      if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("scheme");
-    } catch {
+    if (!absoluteHttp(config.siteUrl)) {
       problems.push({
         level: "warn",
         key: "NEXT_PUBLIC_SITE_URL",
@@ -220,6 +241,38 @@ export function inspectConfig(env: Env): Problem[] {
     });
   }
 
+  const rawAnalyticsApiUrl = trimmed(env[ANALYTICS_API_URL]);
+  if (rawAnalyticsApiUrl !== null && config.analyticsApiUrl === null) {
+    problems.push({
+      level: "warn",
+      key: ANALYTICS_API_URL,
+      message: `${ANALYTICS_API_URL} is not an absolute http(s) URL (${rawAnalyticsApiUrl}). Ignoring it, so events go to the OpenPanel cloud rather than nowhere.`,
+    });
+  }
+
+  if (config.analyticsApiUrl !== null && !config.analyticsClientId) {
+    problems.push({
+      level: "warn",
+      key: "NEXT_PUBLIC_OPENPANEL_CLIENT_ID",
+      message:
+        "A self-hosted analytics endpoint is set without NEXT_PUBLIC_OPENPANEL_CLIENT_ID. Without a client id the SDK is never mounted, so the endpoint is never called.",
+    });
+  }
+
+  // Vercel keeps whatever name you typed, so a slip here is invisible: the
+  // build is green, the SDK falls back to the cloud, and the self-hosted
+  // instance stays empty. Name any near miss rather than let it pass.
+  for (const key of Object.keys(env)) {
+    if (key === ANALYTICS_API_URL) continue;
+    if (!/^NEX.*OPENPANEL.*API.*URL/i.test(key)) continue;
+    if (trimmed(env[key]) === null) continue;
+    problems.push({
+      level: "warn",
+      key,
+      message: `${key} is set, but the variable the OpenPanel SDK reads here is ${ANALYTICS_API_URL}. Events are going to the OpenPanel cloud, not the self-hosted instance. Rename it.`,
+    });
+  }
+
   return problems;
 }
 
@@ -232,7 +285,13 @@ export function describeConfig(env: Env): string {
     `payments: ${config.polar ? `polar (${config.polar.server})` : "none"}`,
     `simulated payments: ${config.allowSimulatedPayments ? "ON" : "off"}`,
     `clock start: ${config.launchAt ? new Date(config.launchAt).toISOString() : "first read"}`,
-    state(config.analyticsClientId !== null, "analytics"),
+    `analytics: ${
+      config.analyticsClientId === null
+        ? "off"
+        : config.analyticsApiUrl === null
+          ? "openpanel cloud"
+          : `self-hosted (${config.analyticsApiUrl})`
+    }`,
     `site url: ${config.siteUrl}`,
   ].join(", ");
 }
