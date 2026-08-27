@@ -131,6 +131,7 @@ past starts the app near death, and setting it far enough back starts it dead.
 | `components/Standings.tsx` | The board. |
 | `components/ui/site-link.tsx` | Every outbound link, and its rel attributes. |
 | `components/Memorial.tsx` | The dead state. |
+| `docs/polar-setup.md` | Every text Polar asks for, ready to paste. |
 
 ### Redis keys
 

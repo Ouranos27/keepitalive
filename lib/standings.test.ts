@@ -154,11 +154,25 @@ test("checkout carries the tier and link, and identifies nobody", () => {
   }
 });
 
-test("null name and url become empty strings rather than the string null", () => {
+test("an absent name or link is left out of the metadata, not sent as empty", () => {
+  // Polar's metadata values are strings of 1 to 500 characters, so an empty
+  // one is a validation error rather than an empty value: sending "" would
+  // fail the checkout for every anonymous payer, which is most of them.
   const body = buildCheckoutBody(
     { amountUsd: 3, tier: "transfusion", name: null, url: null, successUrl: "https://x/" },
     "p",
   );
-  assert.equal(body.metadata.name, "");
-  assert.equal(body.metadata.url, "");
+  assert.deepEqual(body.metadata, { tier: "transfusion" });
+
+  for (const value of Object.values(body.metadata)) {
+    assert.ok(value.length >= 1 && value.length <= 500, `"${value}" is outside Polar's bounds`);
+  }
+});
+
+test("a whitespace-only name is absent rather than a blank metadata value", () => {
+  const body = buildCheckoutBody(
+    { amountUsd: 3, tier: "transfusion", name: "   ", url: "\n", successUrl: "https://x/" },
+    "p",
+  );
+  assert.deepEqual(body.metadata, { tier: "transfusion" });
 });

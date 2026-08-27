@@ -24,8 +24,18 @@ export function isPolarConfigured(): boolean {
   return config.polar !== null;
 }
 
-/** Polar caps metadata values at 500 characters. */
+/**
+ * Polar's metadata values are strings of 1 to 500 characters.
+ *
+ * The lower bound is the one that bites: an empty string is a validation error,
+ * not an empty value. Name and link are both optional here, so sending `""` for
+ * an absent one would fail the checkout outright — and it would fail exactly
+ * for the anonymous $3 payer, the one this site can least afford to turn away.
+ * Absent means the key is not sent; the webhook reads a missing key and a blank
+ * one the same way.
+ */
 const METADATA_MAX = 500;
+const METADATA_MIN = 1;
 
 export type CheckoutInput = {
   amountUsd: number;
@@ -65,12 +75,21 @@ export function buildCheckoutBody(input: CheckoutInput, productId: string) {
     },
     success_url: input.successUrl,
     // Read back off the webhook. The clock only ever moves from there.
-    metadata: {
-      tier: input.tier.slice(0, METADATA_MAX),
-      name: (input.name ?? "").slice(0, METADATA_MAX),
-      url: (input.url ?? "").slice(0, METADATA_MAX),
-    },
+    metadata: metadataFor(input),
   };
+}
+
+function metadataFor(input: CheckoutInput): Record<string, string> {
+  const metadata: Record<string, string> = {};
+  for (const [key, value] of [
+    ["tier", input.tier],
+    ["name", input.name],
+    ["url", input.url],
+  ] as const) {
+    const text = (value ?? "").trim().slice(0, METADATA_MAX);
+    if (text.length >= METADATA_MIN) metadata[key] = text;
+  }
+  return metadata;
 }
 
 /**
